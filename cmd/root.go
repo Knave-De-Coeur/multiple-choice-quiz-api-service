@@ -17,12 +17,14 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -35,7 +37,7 @@ import (
 
 // User is generic user that launches and signs up
 type User struct {
-	ID               int8   `json:"Id"`
+	ID               int    `json:"Id"`
 	Name             string `json:"Name"`
 	Age              int8   `json:"Age"`
 	Username         string `json:"Username"`
@@ -92,11 +94,13 @@ func runGame() {
 		fmt.Println("a: Sign up")
 		fmt.Println("b: Log in")
 		fmt.Println("c: Exit")
-		option, _, _ := reader.ReadRune()
+		optionStr, _ := reader.ReadString('\n')
 
-		switch option {
+		option := []rune(optionStr)
+
+		switch option[0] {
 		case 'a':
-			createUser()
+			createUser(reader)
 			break
 		case 'b':
 			login()
@@ -167,13 +171,43 @@ func generateQuestions() {
 	}
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func homePage(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(res, "Welcome to the HomePage!")
 	fmt.Println("Endpoint Hit: homePage")
 }
 
-func createUser() {
+func createUser(reader *bufio.Reader) {
+	uid := len(ListOfUsers) + 1
+	newUser := User{
+		ID: uid,
+	}
+
 	fmt.Println("Start creating your profile.")
+	fmt.Println("Enter Name: ")
+	newUser.Name, _ = reader.ReadString('\n')
+
+	fmt.Println("Enter your age: ")
+	rawAge, _ := reader.ReadString('\n')
+	intAge, _ := strconv.ParseInt(rawAge, 3, 8)
+	newUser.Age = int8(intAge)
+
+	fmt.Println("Enter a Username: ")
+	newUser.Username, _ = reader.ReadString('\n')
+	fmt.Println("Enter a password: ")
+	newUser.Password, _ = reader.ReadString('\n')
+
+	userJSON, _ := json.Marshal(newUser)
+
+	res, err := http.Post("http://localhost:9990/new-player", "application/json", bytes.NewBuffer(userJSON))
+	check(err)
+
+	defer res.Body.Close()
 }
 
 func login() {
