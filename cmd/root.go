@@ -26,6 +26,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,8 +56,8 @@ type LoginRequest struct {
 
 // Response is what is returned from the endpoints should an error occurr
 type Response struct {
-	Message string `json:"Message"` 
-	Error bool `json:"Password"`
+	Message string `json:"Message"`
+	Error   bool   `json:"Password"`
 }
 
 // Question presented and evaluated
@@ -65,6 +66,12 @@ type Question struct {
 	Description     string // the literal question to be displayed
 	CorrectAnswer   rune
 	AnswerSelection map[rune]string // up to 5 possible answers
+}
+
+// SubmitAnswersRequest is the struct used to decode and encode when using the /submit-answers endpoint
+type SubmitAnswersRequest struct {
+	UserID           int    `json:"UserID"`
+	SubmittedAnswers []rune `json:"SubmittedAnswers"`
 }
 
 // ListOfQuestions will hold the a list of Question structs to be displayed and evaluated
@@ -90,7 +97,7 @@ var rootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		generateQuestions() // sets questions
+		generateQuestions()  // sets questions
 		generateDummyUsers() // sets users
 
 		// create new wait group
@@ -107,30 +114,38 @@ var rootCmd = &cobra.Command{
 }
 
 func runGame() {
-	fmt.Println("Welcome to Alex's quiz! (press any key and enter to start)")
+	fmt.Println("Welcome to Alex's quiz! Press any key followed by enter to begin.")
 
-	for {
-		fmt.Println("Enter option letter and press enter")
-		reader := bufio.NewReader(os.Stdin)
-		key, _ := reader.ReadString('\n')
+	reader := bufio.NewReader(os.Stdin)
+	key, _ := reader.ReadString('\n')
 
-		if len(key) > 0 {
-			fmt.Println("a: Sign up")
-			fmt.Println("b: Log in")
-			fmt.Println("c: Exit")
+	if len(key) > 0 {
+		for {
+			fmt.Printf("Option selected: %v", key)
+
+			fmt.Println(`Enter option letter and press enter \n
+					a: Sign Up \n
+					b: Log In \n
+					c: Exit \n
+					`)
+
 			optionStr, _ := reader.ReadString('\n')
 
 			option := []rune(optionStr)
+
+			// option, _, _ := reader.ReadRune()
+			// fmt.Println()
 
 			switch option[0] {
 			case 'a':
 				createUser(reader)
 				break
 			case 'b':
+				fmt.Println("Loggin in...")
 				if !loginPrompt(reader) {
 					break
 				}
-				play()
+				play(reader)
 				break
 			case 'c':
 				os.Exit(0)
@@ -140,10 +155,7 @@ func runGame() {
 				break
 			}
 		}
-
-		// TODO: see how well they did compared to other users example: 60% better than others
 	}
-
 }
 
 func generateQuestions() {
@@ -202,14 +214,14 @@ func generateQuestions() {
 }
 
 func generateDummyUsers() {
-	dummyUsers := []User {
+	ListOfUsers = []User{
 		{
 			1,
 			"David Smith",
 			54,
 			"david54",
 			"pass765",
-			[]rune {
+			[]rune{
 				'a', 'c', 'b', 'b', 'c',
 			},
 		},
@@ -219,7 +231,7 @@ func generateDummyUsers() {
 			14,
 			"johndoe14",
 			"pass14",
-			[]rune {
+			[]rune{
 				'a', 'a', 'b', 'c', 'c',
 			},
 		},
@@ -229,31 +241,111 @@ func generateDummyUsers() {
 			28,
 			"seteveb321",
 			"qwerty098",
-			[]rune {
+			[]rune{
 				'c', 'b', 'c', 'c', 'c',
 			},
 		},
 	}
-
-	ListOfUsers = append(ListOfUsers, dummyUsers...)
 }
 
-func play () {
-	fmt.Printf("Press any key followed by enter to start the game you have %v questions", len(ListOfQuestions))
+func play(reader *bufio.Reader) bool {
+	fmt.Printf("Press any key followed by enter to start the game you have %v questions \n", len(ListOfQuestions))
 
 	currentUser := searchUsersByID(CurrentUserID)
 
-	for i := range ListOfQuestions {
-		fmt.Println(ListOfQuestions[i].Description)
-		submittedAnswer, _, _ := Reader.ReadRune()
-		currentUser.SubmittedAnswers = append(currentUser.SubmittedAnswers, submittedAnswer)
-		fmt.Println()
-	}
-	fmt.Println("Evaluation answers")
-	time.Sleep(3000) // for dramatic suspense
+	fmt.Printf("User: %v \n", currentUser)
 
-	// res, err := http.Post("http://localhost:9990/submit-answer", "application/json", bytes.NewBuffer(userJSON))
-	// check(err)
+	key, err := reader.ReadString('\n')
+	check(err)
+
+	if len(key) > 0 {
+		fmt.Println(ListOfQuestions)
+		for _, q := range ListOfQuestions {
+			fmt.Println("Qustion: " + string(q.ID) + " " + q.Description)
+			for key, question := range q.AnswerSelection {
+				fmt.Println(string(key) + ": " + question)
+			}
+			submittedAnswer, err := reader.ReadString('\n')
+			check(err)
+			answerRune := []rune(submittedAnswer)[0]
+			fmt.Println("answer submitted: " + string(answerRune))
+			currentUser.SubmittedAnswers = append(currentUser.SubmittedAnswers, answerRune)
+		}
+		fmt.Println("Evaluating answers...")
+		time.Sleep(2 * time.Second) // for dramatic suspense
+
+		fmt.Printf("User: %v \n", currentUser)
+
+		submitAnswerRequest := SubmitAnswersRequest{
+			currentUser.ID,
+			currentUser.SubmittedAnswers,
+		}
+
+		requestJSON, _ := json.Marshal(submitAnswerRequest)
+
+		res, err := http.Post("http://localhost:9990/submit-answer", "application/json", bytes.NewBuffer(requestJSON))
+		check(err)
+
+		defer res.Body.Close()
+
+		var responseMessage Response
+
+		json.NewDecoder(res.Body).Decode(&responseMessage)
+
+		fmt.Println(responseMessage)
+
+	}
+
+	return true
+}
+
+func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var submitAnswerRequest SubmitAnswersRequest
+	json.Unmarshal(reqBody, &submitAnswerRequest)
+
+	fmt.Printf("submitted answers: %v \n", submitAnswerRequest)
+
+	currentUser := User{}
+
+	// set the users answers
+	for _, u := range ListOfUsers {
+		if u.ID == submitAnswerRequest.UserID {
+			u.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
+			currentUser = u
+			break
+		}
+	}
+
+	correctAnswers := 0
+
+	for _, q := range ListOfQuestions {
+		found := find(currentUser.SubmittedAnswers, q.CorrectAnswer)
+		if found {
+			correctAnswers++
+		}
+	}
+
+	message := "You have answered " + strconv.Itoa(correctAnswers) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+
+	responseMessage := Response{
+		message,
+		false,
+	}
+
+	json.NewEncoder(res).Encode(responseMessage)
+}
+
+func find(source []rune, value rune) bool {
+	fmt.Printf("source: %v \n", source)
+	fmt.Printf("value: %v \n", value)
+	for _, item := range source {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func check(e error) {
@@ -303,7 +395,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 	fmt.Println("Please enter Password:")
 	inputtedPassword, _ := reader.ReadString('\n')
 
-	loginRequest := LoginRequest {
+	loginRequest := LoginRequest{
 		inputtedUsername,
 		inputtedPassword,
 	}
@@ -317,7 +409,9 @@ func loginPrompt(reader *bufio.Reader) bool {
 
 	var responseMessage Response
 
-	json.NewDecoder(res.Body).Decode(responseMessage)
+	json.NewDecoder(res.Body).Decode(&responseMessage)
+
+	fmt.Printf("response of login is: %v \n", responseMessage)
 
 	return !responseMessage.Error
 }
@@ -328,14 +422,18 @@ func login(res http.ResponseWriter, req *http.Request) {
 	var loginReq LoginRequest
 	json.Unmarshal(reqBody, &loginReq)
 
+	fmt.Printf("loginReq: %v \n", loginReq)
+
 	currentUser := searchUsersForUsername(loginReq.Username)
 
+	fmt.Printf("currentUser: %v \n", currentUser)
+
 	if currentUser.ID == 0 {
-		fmt.Errorf("User not found %v", loginReq.Username)
+		fmt.Printf("User not found %v", loginReq.Username)
 	}
 
-	if currentUser.Password != loginReq.Password {
-		fmt.Errorf("Password: %v is wrong try again", loginReq)
+	if currentUser.Password != strings.TrimSpace(loginReq.Password) {
+		fmt.Printf("Password: %v is wrong try again", loginReq.Password)
 	}
 
 	CurrentUserID = currentUser.ID
@@ -346,29 +444,33 @@ func login(res http.ResponseWriter, req *http.Request) {
 }
 
 func searchUsersForUsername(userName string) User {
-	for i := range ListOfUsers {
-		if ListOfUsers[i].Username == userName {
-			user := ListOfUsers[i]
-			return user
+	user := User{}
+
+	for _, userFromList := range ListOfUsers {
+		if userFromList.Username == strings.TrimSpace(userName) {
+			user = userFromList
+			break
 		}
 	}
 
-	return User{}
+	return user
 }
 
 func searchUsersByID(ID int) User {
-	for i := range ListOfUsers {
-		if ListOfUsers[i].ID == ID {
-			user := ListOfUsers[i]
-			return user
+	user := User{}
+
+	for _, userFromList := range ListOfUsers {
+		if userFromList.ID == ID {
+			user = userFromList
+			break
 		}
 	}
 
-	return User{}
+	return user
 }
 
 // TODO: finish this
-func searchUsersByProp(property string, value interface {}) User {
+func searchUsersByProp(property string, value interface{}) User {
 	user := User{}
 	for i := range ListOfUsers {
 		rv := reflect.ValueOf(ListOfUsers[i])
@@ -383,7 +485,7 @@ func searchUsersByProp(property string, value interface {}) User {
 
 		if field == value {
 			user = ListOfUsers[i]
-			break;
+			break
 		}
 	}
 
@@ -408,7 +510,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/", homePage)
 	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
 	myRouter.HandleFunc("/login", login).Methods("POST")
-	myRouter.HandleFunc("/submit-answer", login).Methods("POST")
+	myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
 	myRouter.HandleFunc("/your-results", login).Methods("POST")
 	myRouter.HandleFunc("/compare-your-results", login).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
