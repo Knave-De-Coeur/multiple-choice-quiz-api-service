@@ -24,8 +24,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -42,7 +44,19 @@ type User struct {
 	Age              int8   `json:"Age"`
 	Username         string `json:"Username"`
 	Password         string `json:"Password"`
-	SubmittedAnswers []rune
+	SubmittedAnswers []rune `json:"SubmittedAnswers"`
+}
+
+// LoginRequest is the parsed struct of the /login endpoint
+type LoginRequest struct {
+	Username string `json:"Username"`
+	Password string `json:"Password"`
+}
+
+// Response is what is returned from the endpoints should an error occurr
+type Response struct {
+	Message string `json:"Message"` 
+	Error bool `json:"Password"`
 }
 
 // Question presented and evaluated
@@ -59,6 +73,12 @@ var ListOfQuestions []Question
 // ListOfUsers all the players that have registered to the quiz
 var ListOfUsers []User
 
+// CurrentUserID The logged in user id interacting with the application
+var CurrentUserID int
+
+// Reader is the gloabl input reader for the application
+var Reader bufio.Reader
+
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
@@ -71,6 +91,7 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		generateQuestions() // sets questions
+		generateDummyUsers() // sets users
 
 		// create new wait group
 		wg := new(sync.WaitGroup)
@@ -86,32 +107,41 @@ var rootCmd = &cobra.Command{
 }
 
 func runGame() {
-	fmt.Println("Welcome to Alex's quiz! (press any key to start)")
-	reader := bufio.NewReader(os.Stdin)
-	key, _ := reader.ReadString('\n')
+	fmt.Println("Welcome to Alex's quiz! (press any key and enter to start)")
 
-	if len(key) > 0 {
-		fmt.Println("a: Sign up")
-		fmt.Println("b: Log in")
-		fmt.Println("c: Exit")
-		optionStr, _ := reader.ReadString('\n')
+	for {
+		fmt.Println("Enter option letter and press enter")
+		reader := bufio.NewReader(os.Stdin)
+		key, _ := reader.ReadString('\n')
 
-		option := []rune(optionStr)
+		if len(key) > 0 {
+			fmt.Println("a: Sign up")
+			fmt.Println("b: Log in")
+			fmt.Println("c: Exit")
+			optionStr, _ := reader.ReadString('\n')
 
-		switch option[0] {
-		case 'a':
-			createUser(reader)
-			break
-		case 'b':
-			login()
-			break
-		case 'c':
-			os.Exit(0)
-			break
-		default:
-			fmt.Println("Invalid try again")
-			break
+			option := []rune(optionStr)
+
+			switch option[0] {
+			case 'a':
+				createUser(reader)
+				break
+			case 'b':
+				if !loginPrompt(reader) {
+					break
+				}
+				play()
+				break
+			case 'c':
+				os.Exit(0)
+				break
+			default:
+				fmt.Println("Invalid try again")
+				break
+			}
 		}
+
+		// TODO: see how well they did compared to other users example: 60% better than others
 	}
 
 }
@@ -171,6 +201,61 @@ func generateQuestions() {
 	}
 }
 
+func generateDummyUsers() {
+	dummyUsers := []User {
+		{
+			1,
+			"David Smith",
+			54,
+			"david54",
+			"pass765",
+			[]rune {
+				'a', 'c', 'b', 'b', 'c',
+			},
+		},
+		{
+			2,
+			"John Doe",
+			14,
+			"johndoe14",
+			"pass14",
+			[]rune {
+				'a', 'a', 'b', 'c', 'c',
+			},
+		},
+		{
+			3,
+			"Steve Bord",
+			28,
+			"seteveb321",
+			"qwerty098",
+			[]rune {
+				'c', 'b', 'c', 'c', 'c',
+			},
+		},
+	}
+
+	ListOfUsers = append(ListOfUsers, dummyUsers...)
+}
+
+func play () {
+	fmt.Printf("Press any key followed by enter to start the game you have %v questions", len(ListOfQuestions))
+
+	currentUser := searchUsersByID(CurrentUserID)
+
+	for i := range ListOfQuestions {
+		fmt.Println(ListOfQuestions[i].Description)
+		submittedAnswer, _, _ := Reader.ReadRune()
+		currentUser.SubmittedAnswers = append(currentUser.SubmittedAnswers, submittedAnswer)
+		fmt.Println()
+	}
+	fmt.Println("Evaluation answers")
+	time.Sleep(3000) // for dramatic suspense
+
+	// res, err := http.Post("http://localhost:9990/submit-answer", "application/json", bytes.NewBuffer(userJSON))
+	// check(err)
+}
+
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -210,8 +295,99 @@ func createUser(reader *bufio.Reader) {
 	defer res.Body.Close()
 }
 
-func login() {
-	fmt.Println("Please enter Username")
+// This will check the users input and set the CurrentUser
+func loginPrompt(reader *bufio.Reader) bool {
+	fmt.Println("Please enter Username:")
+	inputtedUsername, _ := reader.ReadString('\n')
+
+	fmt.Println("Please enter Password:")
+	inputtedPassword, _ := reader.ReadString('\n')
+
+	loginRequest := LoginRequest {
+		inputtedUsername,
+		inputtedPassword,
+	}
+
+	loginRequestJSON, _ := json.Marshal(loginRequest)
+
+	res, err := http.Post("http://localhost:9990/login", "application/json", bytes.NewBuffer(loginRequestJSON))
+	check(err)
+
+	defer res.Body.Close()
+
+	var responseMessage Response
+
+	json.NewDecoder(res.Body).Decode(responseMessage)
+
+	return !responseMessage.Error
+}
+
+func login(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var loginReq LoginRequest
+	json.Unmarshal(reqBody, &loginReq)
+
+	currentUser := searchUsersForUsername(loginReq.Username)
+
+	if currentUser.ID == 0 {
+		fmt.Errorf("User not found %v", loginReq.Username)
+	}
+
+	if currentUser.Password != loginReq.Password {
+		fmt.Errorf("Password: %v is wrong try again", loginReq)
+	}
+
+	CurrentUserID = currentUser.ID
+
+	fmt.Fprintf(res, "User %v Found", currentUser.Username)
+	json.NewEncoder(res).Encode(currentUser)
+
+}
+
+func searchUsersForUsername(userName string) User {
+	for i := range ListOfUsers {
+		if ListOfUsers[i].Username == userName {
+			user := ListOfUsers[i]
+			return user
+		}
+	}
+
+	return User{}
+}
+
+func searchUsersByID(ID int) User {
+	for i := range ListOfUsers {
+		if ListOfUsers[i].ID == ID {
+			user := ListOfUsers[i]
+			return user
+		}
+	}
+
+	return User{}
+}
+
+// TODO: finish this
+func searchUsersByProp(property string, value interface {}) User {
+	user := User{}
+	for i := range ListOfUsers {
+		rv := reflect.ValueOf(ListOfUsers[i])
+
+		rv = rv.Elem()
+
+		field := rv.FieldByName(property)
+
+		if !field.IsValid() {
+			fmt.Errorf("not a field name: %s", property)
+		}
+
+		if field == value {
+			user = ListOfUsers[i]
+			break;
+		}
+	}
+
+	return user
 }
 
 func addNewUser(res http.ResponseWriter, req *http.Request) {
@@ -219,7 +395,7 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 	var newPlayer User
 	json.Unmarshal(reqBody, &newPlayer)
 	ListOfUsers = append(ListOfUsers, newPlayer)
-	fmt.Println("Player with usernsme: " + newPlayer.Username + " added!")
+	fmt.Println("Player with username: " + newPlayer.Username + " added!")
 	json.NewEncoder(res).Encode(newPlayer)
 }
 
@@ -231,7 +407,12 @@ func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homePage)
 	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
+	myRouter.HandleFunc("/login", login).Methods("POST")
+	myRouter.HandleFunc("/submit-answer", login).Methods("POST")
+	myRouter.HandleFunc("/your-results", login).Methods("POST")
+	myRouter.HandleFunc("/compare-your-results", login).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
+	myRouter.HandleFunc("/results", showPlayers)
 	log.Fatal(http.ListenAndServe(":9990", myRouter))
 }
 
