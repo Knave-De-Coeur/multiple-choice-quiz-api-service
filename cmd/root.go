@@ -24,7 +24,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"reflect"
+
+	// "reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,9 @@ import (
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
+
+// Endpoint is the hostname that we'll eb perforing rest requests to.
+const Endpoint = "http://localhost:9990"
 
 // User is generic user that launches and signs up
 type User struct {
@@ -52,6 +56,11 @@ type User struct {
 type LoginRequest struct {
 	Username string `json:"Username"`
 	Password string `json:"Password"`
+}
+
+// LogoutRequest is the parsed struct of the /logout endpoint
+type LogoutRequest struct {
+	UID int
 }
 
 // Response is what is returned from the endpoints should an error occurr
@@ -121,39 +130,56 @@ func runGame() {
 
 	if len(key) > 0 {
 		for {
-			fmt.Printf("Option selected: %v", key)
+			fmt.Println("Enter option letter and press enter")
 
-			fmt.Println(`Enter option letter and press enter \n
-					a: Sign Up \n
-					b: Log In \n
-					c: Exit \n
-					`)
+			if CurrentUserID == 0 {
+				fmt.Println("a: Sign Up")
+				fmt.Println("b: Login")
+				fmt.Println("c: Exit")
 
-			optionStr, _ := reader.ReadString('\n')
+				optionStr, _ := reader.ReadString('\n')
 
-			option := []rune(optionStr)
+				option := []rune(optionStr)
 
-			// option, _, _ := reader.ReadRune()
-			// fmt.Println()
-
-			switch option[0] {
-			case 'a':
-				createUser(reader)
-				break
-			case 'b':
-				fmt.Println("Loggin in...")
-				if !loginPrompt(reader) {
+				switch option[0] {
+				case 'a':
+					createUser(reader)
+					break
+				case 'b':
+					loginPrompt(reader)
+					break
+				case 'c':
+					os.Exit(0)
+					break
+				default:
+					fmt.Println("Invalid try again")
 					break
 				}
-				play(reader)
-				break
-			case 'c':
-				os.Exit(0)
-				break
-			default:
-				fmt.Println("Invalid try again")
-				break
+			} else {
+				fmt.Println("a: Play")
+				fmt.Println("b: Logout")
+				fmt.Println("c: Exit")
+
+				optionStr, _ := reader.ReadString('\n')
+
+				option := []rune(optionStr)
+
+				switch option[0] {
+				case 'a':
+					play(reader)
+					break
+				case 'b':
+					logoutPrompt(reader)
+					break
+				case 'c':
+					os.Exit(0)
+					break
+				default:
+					fmt.Println("Invalid try again")
+					break
+				}
 			}
+
 		}
 	}
 }
@@ -216,32 +242,32 @@ func generateQuestions() {
 func generateDummyUsers() {
 	ListOfUsers = []User{
 		{
-			1,
-			"David Smith",
-			54,
-			"david54",
-			"pass765",
-			[]rune{
+			ID:       1,
+			Name:     "David Smith",
+			Age:      54,
+			Username: "david54",
+			Password: "pass765",
+			SubmittedAnswers: []rune{
 				'a', 'c', 'b', 'b', 'c',
 			},
 		},
 		{
-			2,
-			"John Doe",
-			14,
-			"johndoe14",
-			"pass14",
-			[]rune{
+			ID:       2,
+			Name:     "John Doe",
+			Age:      14,
+			Username: "johndoe14",
+			Password: "pass14",
+			SubmittedAnswers: []rune{
 				'a', 'a', 'b', 'c', 'c',
 			},
 		},
 		{
-			3,
-			"Steve Bord",
-			28,
-			"seteveb321",
-			"qwerty098",
-			[]rune{
+			ID:       3,
+			Name:     "Steve Bord",
+			Age:      28,
+			Username: "seteveb321",
+			Password: "qwerty098",
+			SubmittedAnswers: []rune{
 				'c', 'b', 'c', 'c', 'c',
 			},
 		},
@@ -253,13 +279,12 @@ func play(reader *bufio.Reader) bool {
 
 	currentUser := searchUsersByID(CurrentUserID)
 
-	fmt.Printf("User: %v \n", currentUser)
-
 	key, err := reader.ReadString('\n')
 	check(err)
 
 	if len(key) > 0 {
 		fmt.Println(ListOfQuestions)
+		listOfSubmittedRunes := []rune{}
 		for _, q := range ListOfQuestions {
 			fmt.Println("Qustion: " + string(q.ID) + " " + q.Description)
 			for key, question := range q.AnswerSelection {
@@ -269,21 +294,19 @@ func play(reader *bufio.Reader) bool {
 			check(err)
 			answerRune := []rune(submittedAnswer)[0]
 			fmt.Println("answer submitted: " + string(answerRune))
-			currentUser.SubmittedAnswers = append(currentUser.SubmittedAnswers, answerRune)
+			listOfSubmittedRunes = append(listOfSubmittedRunes, answerRune)
 		}
 		fmt.Println("Evaluating answers...")
 		time.Sleep(2 * time.Second) // for dramatic suspense
 
-		fmt.Printf("User: %v \n", currentUser)
-
 		submitAnswerRequest := SubmitAnswersRequest{
 			currentUser.ID,
-			currentUser.SubmittedAnswers,
+			listOfSubmittedRunes,
 		}
 
 		requestJSON, _ := json.Marshal(submitAnswerRequest)
 
-		res, err := http.Post("http://localhost:9990/submit-answer", "application/json", bytes.NewBuffer(requestJSON))
+		res, err := http.Post(Endpoint+"/submit-answer", "application/json", bytes.NewBuffer(requestJSON))
 		check(err)
 
 		defer res.Body.Close()
@@ -292,7 +315,7 @@ func play(reader *bufio.Reader) bool {
 
 		json.NewDecoder(res.Body).Decode(&responseMessage)
 
-		fmt.Println(responseMessage)
+		fmt.Println(responseMessage.Message)
 
 	}
 
@@ -305,11 +328,9 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	var submitAnswerRequest SubmitAnswersRequest
 	json.Unmarshal(reqBody, &submitAnswerRequest)
 
-	fmt.Printf("submitted answers: %v \n", submitAnswerRequest)
-
 	currentUser := User{}
 
-	// set the users answers
+	// set or re-set the users answers
 	for _, u := range ListOfUsers {
 		if u.ID == submitAnswerRequest.UserID {
 			u.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
@@ -317,6 +338,8 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 			break
 		}
 	}
+
+	fmt.Printf("Current user in submitanswers endpoint: %v ", currentUser)
 
 	correctAnswers := 0
 
@@ -339,7 +362,6 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 func find(source []rune, value rune) bool {
 	fmt.Printf("source: %v \n", source)
-	fmt.Printf("value: %v \n", value)
 	for _, item := range source {
 		if item == value {
 			return true
@@ -381,7 +403,7 @@ func createUser(reader *bufio.Reader) {
 
 	userJSON, _ := json.Marshal(newUser)
 
-	res, err := http.Post("http://localhost:9990/new-player", "application/json", bytes.NewBuffer(userJSON))
+	res, err := http.Post(Endpoint+"/new-player", "application/json", bytes.NewBuffer(userJSON))
 	check(err)
 
 	defer res.Body.Close()
@@ -402,7 +424,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 
 	loginRequestJSON, _ := json.Marshal(loginRequest)
 
-	res, err := http.Post("http://localhost:9990/login", "application/json", bytes.NewBuffer(loginRequestJSON))
+	res, err := http.Post(Endpoint+"/login", "application/json", bytes.NewBuffer(loginRequestJSON))
 	check(err)
 
 	defer res.Body.Close()
@@ -411,7 +433,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 
 	json.NewDecoder(res.Body).Decode(&responseMessage)
 
-	fmt.Printf("response of login is: %v \n", responseMessage)
+	fmt.Printf("response of login is: %v \n", responseMessage.Message)
 
 	return !responseMessage.Error
 }
@@ -422,25 +444,74 @@ func login(res http.ResponseWriter, req *http.Request) {
 	var loginReq LoginRequest
 	json.Unmarshal(reqBody, &loginReq)
 
-	fmt.Printf("loginReq: %v \n", loginReq)
-
 	currentUser := searchUsersForUsername(loginReq.Username)
 
-	fmt.Printf("currentUser: %v \n", currentUser)
-
+	found := false
+	message := ""
 	if currentUser.ID == 0 {
-		fmt.Printf("User not found %v", loginReq.Username)
+		message = "User not found: " + loginReq.Username
+	} else if currentUser.Password != strings.TrimSpace(loginReq.Password) {
+		message = "Password is wrong try again."
+	} else {
+		CurrentUserID = currentUser.ID
+		found = true
+		message = "Sucessfully logged in with user: " + currentUser.Username
 	}
 
-	if currentUser.Password != strings.TrimSpace(loginReq.Password) {
-		fmt.Printf("Password: %v is wrong try again", loginReq.Password)
+	messageResponse := Response{
+		message,
+		found,
 	}
 
-	CurrentUserID = currentUser.ID
+	json.NewEncoder(res).Encode(messageResponse)
 
-	fmt.Fprintf(res, "User %v Found", currentUser.Username)
-	json.NewEncoder(res).Encode(currentUser)
+}
 
+func logoutPrompt(reader *bufio.Reader) bool {
+	logout := LogoutRequest{
+		UID: CurrentUserID,
+	}
+
+	logoutRequestJSON, _ := json.Marshal(logout)
+
+	res, err := http.Post(Endpoint+"/logout", "application/json", bytes.NewBuffer(logoutRequestJSON))
+	check(err)
+
+	defer res.Body.Close()
+
+	var responseMessage Response
+
+	json.NewDecoder(res.Body).Decode(&responseMessage)
+
+	fmt.Println(responseMessage.Message)
+
+	return !responseMessage.Error
+}
+
+func logout(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var logoutRequest LogoutRequest
+	json.Unmarshal(reqBody, &logoutRequest)
+
+	message := ""
+	foundError := false
+
+	if CurrentUserID != logoutRequest.UID {
+		message = "Id doesn't match id to eb logged out."
+		foundError = true 
+	}
+
+	fmt.Printf("Removing logged in userId: %v \n", CurrentUserID)
+
+	CurrentUserID = 0
+
+	resMessage := Response{
+		message,
+		foundError,
+	}
+
+	json.NewEncoder(res).Encode(resMessage)
 }
 
 func searchUsersForUsername(userName string) User {
@@ -470,27 +541,27 @@ func searchUsersByID(ID int) User {
 }
 
 // TODO: finish this
-func searchUsersByProp(property string, value interface{}) User {
-	user := User{}
-	for i := range ListOfUsers {
-		rv := reflect.ValueOf(ListOfUsers[i])
+// func searchUsersByProp(property string, value interface{}) User {
+// 	user := User{}
+// 	for i := range ListOfUsers {
+// 		rv := reflect.ValueOf(ListOfUsers[i])
 
-		rv = rv.Elem()
+// 		rv = rv.Elem()
 
-		field := rv.FieldByName(property)
+// 		field := rv.FieldByName(property)
 
-		if !field.IsValid() {
-			fmt.Errorf("not a field name: %s", property)
-		}
+// 		if !field.IsValid() {
+// 			fmt.Errorf("not a field name: %s", property)
+// 		}
 
-		if field == value {
-			user = ListOfUsers[i]
-			break
-		}
-	}
+// 		if field == value {
+// 			user = ListOfUsers[i]
+// 			break
+// 		}
+// 	}
 
-	return user
-}
+// 	return user
+// }
 
 func addNewUser(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
@@ -510,11 +581,10 @@ func handleRequests() {
 	myRouter.HandleFunc("/", homePage)
 	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
 	myRouter.HandleFunc("/login", login).Methods("POST")
+	myRouter.HandleFunc("/logout", logout).Methods("POST")
 	myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
-	myRouter.HandleFunc("/your-results", login).Methods("POST")
 	myRouter.HandleFunc("/compare-your-results", login).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
-	myRouter.HandleFunc("/results", showPlayers)
 	log.Fatal(http.ListenAndServe(":9990", myRouter))
 }
 
