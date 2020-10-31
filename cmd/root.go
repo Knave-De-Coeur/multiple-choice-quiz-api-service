@@ -330,6 +330,7 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 	currentUser := User{}
 
+
 	// set or re-set the users answers
 	for _, u := range ListOfUsers {
 		if u.ID == submitAnswerRequest.UserID {
@@ -339,13 +340,10 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	fmt.Printf("Current user in submitanswers endpoint: %v ", currentUser)
-
 	correctAnswers := 0
 
-	for _, q := range ListOfQuestions {
-		found := find(currentUser.SubmittedAnswers, q.CorrectAnswer)
-		if found {
+	for i := range ListOfQuestions {
+		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
 			correctAnswers++
 		}
 	}
@@ -358,16 +356,6 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	}
 
 	json.NewEncoder(res).Encode(responseMessage)
-}
-
-func find(source []rune, value rune) bool {
-	fmt.Printf("source: %v \n", source)
-	for _, item := range source {
-		if item == value {
-			return true
-		}
-	}
-	return false
 }
 
 func check(e error) {
@@ -400,6 +388,10 @@ func createUser(reader *bufio.Reader) {
 	newUser.Username, _ = reader.ReadString('\n')
 	fmt.Println("Enter a password: ")
 	newUser.Password, _ = reader.ReadString('\n')
+
+	newUser.Name = strings.TrimSpace(newUser.Name)
+	newUser.Username = strings.TrimSpace(newUser.Username)
+	newUser.Password = strings.TrimSpace(newUser.Password)
 
 	userJSON, _ := json.Marshal(newUser)
 
