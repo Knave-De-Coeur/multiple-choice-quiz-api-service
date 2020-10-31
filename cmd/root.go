@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 
@@ -50,6 +51,7 @@ type User struct {
 	Username         string `json:"Username"`
 	Password         string `json:"Password"`
 	SubmittedAnswers []rune `json:"SubmittedAnswers"`
+	Score            int    `json:"Score"`
 }
 
 // LoginRequest is the parsed struct of the /login endpoint
@@ -60,7 +62,7 @@ type LoginRequest struct {
 
 // LogoutRequest is the parsed struct of the /logout endpoint
 type LogoutRequest struct {
-	UID int
+	UserID int
 }
 
 // Response is what is returned from the endpoints should an error occurr
@@ -81,6 +83,12 @@ type Question struct {
 type SubmitAnswersRequest struct {
 	UserID           int    `json:"UserID"`
 	SubmittedAnswers []rune `json:"SubmittedAnswers"`
+}
+
+// CompareUsersRequest is the struct we parse and send over to the /compare-your-score endpoint
+type CompareUsersRequest struct {
+	UserID    int `json:"UserID"`
+	UserScore int `json:"UserScore"`
 }
 
 // ListOfQuestions will hold the a list of Question structs to be displayed and evaluated
@@ -158,7 +166,8 @@ func runGame() {
 			} else {
 				fmt.Println("a: Play")
 				fmt.Println("b: Logout")
-				fmt.Println("c: Exit")
+				fmt.Println("c: Compare")
+				fmt.Println("d: Exit")
 
 				optionStr, _ := reader.ReadString('\n')
 
@@ -172,6 +181,9 @@ func runGame() {
 					logoutPrompt(reader)
 					break
 				case 'c':
+					compare()
+					break
+				case 'd':
 					os.Exit(0)
 					break
 				default:
@@ -250,6 +262,7 @@ func generateDummyUsers() {
 			SubmittedAnswers: []rune{
 				'a', 'c', 'b', 'b', 'c',
 			},
+			Score: 2,
 		},
 		{
 			ID:       2,
@@ -260,6 +273,7 @@ func generateDummyUsers() {
 			SubmittedAnswers: []rune{
 				'a', 'a', 'b', 'c', 'c',
 			},
+			Score: 3,
 		},
 		{
 			ID:       3,
@@ -270,6 +284,7 @@ func generateDummyUsers() {
 			SubmittedAnswers: []rune{
 				'c', 'b', 'c', 'c', 'c',
 			},
+			Score: 2,
 		},
 	}
 }
@@ -330,7 +345,6 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 	currentUser := User{}
 
-
 	// set or re-set the users answers
 	for _, u := range ListOfUsers {
 		if u.ID == submitAnswerRequest.UserID {
@@ -340,15 +354,13 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	correctAnswers := 0
-
 	for i := range ListOfQuestions {
 		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
-			correctAnswers++
+			currentUser.Score++
 		}
 	}
 
-	message := "You have answered " + strconv.Itoa(correctAnswers) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
 
 	responseMessage := Response{
 		message,
@@ -461,7 +473,7 @@ func login(res http.ResponseWriter, req *http.Request) {
 
 func logoutPrompt(reader *bufio.Reader) bool {
 	logout := LogoutRequest{
-		UID: CurrentUserID,
+		UserID: CurrentUserID,
 	}
 
 	logoutRequestJSON, _ := json.Marshal(logout)
@@ -489,9 +501,9 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	message := ""
 	foundError := false
 
-	if CurrentUserID != logoutRequest.UID {
+	if CurrentUserID != logoutRequest.UserID {
 		message = "Id doesn't match id to eb logged out."
-		foundError = true 
+		foundError = true
 	}
 
 	fmt.Printf("Removing logged in userId: %v \n", CurrentUserID)
@@ -568,6 +580,83 @@ func showPlayers(res http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(res).Encode(ListOfUsers)
 }
 
+func compare() bool {
+	currentUser := searchUsersByID(CurrentUserID)
+
+	requestData := CompareUsersRequest{
+		UserID:    currentUser.ID,
+		UserScore: currentUser.Score,
+	}
+
+	requestJSON, _ := json.Marshal(requestData)
+
+	res, err := http.Post(Endpoint+"/compare-your-score", "application/json", bytes.NewBuffer(requestJSON))
+	check(err)
+
+	defer res.Body.Close()
+
+	var responseMessage Response
+
+	json.NewDecoder(res.Body).Decode(&responseMessage)
+
+	fmt.Println(responseMessage.Message)
+
+	return !responseMessage.Error
+}
+
+func compareUserScores(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+	var compareUsersRequest CompareUsersRequest
+	json.Unmarshal(reqBody, &compareUsersRequest)
+
+	x := getUserComparisonScore(searchUsersByID(compareUsersRequest.UserID), compareUsersRequest.UserScore)
+
+	negative := math.Signbit(x)
+	message := ""
+
+	userScoreComparison := strconv.FormatFloat(x, 'f', 4, 64)
+
+	if negative {
+		message = "You did " + userScoreComparison + "% worse than everyone!"
+	} else {
+		message = "You did " + userScoreComparison + "% better than everyone!"
+	}
+
+	responseMessage := Response{
+		message,
+		false,
+	}
+
+	json.NewEncoder(res).Encode(responseMessage)
+}
+
+func getUserComparisonScore(currentUser User, userScore int) float64 {
+
+	listOfScores := []int{}
+
+	sumPercentages := 0
+	// step1: get individual percentages
+	for i := range ListOfUsers {
+		if ListOfUsers[i].ID != currentUser.ID {
+			scorePercentage := (ListOfUsers[i].Score * 20)
+			sumPercentages += scorePercentage
+			listOfScores = append(listOfScores, scorePercentage) // since we're dealing with 5 questions
+		}
+	}
+
+	// step2 : get average
+	averagePercentage := (float64(sumPercentages) / (float64(len(listOfScores))))
+	fmt.Printf("Average percentage: %v \n", averagePercentage)
+	// step3 : get your percentage
+	userScorePrecentage := float64(currentUser.Score * 20)
+	fmt.Printf("User score percentage: %v \n", userScorePrecentage)
+
+	// step4 subtract
+	x := userScorePrecentage - averagePercentage
+
+	return x
+}
+
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homePage)
@@ -575,7 +664,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/login", login).Methods("POST")
 	myRouter.HandleFunc("/logout", logout).Methods("POST")
 	myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
-	myRouter.HandleFunc("/compare-your-results", login).Methods("POST")
+	myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
 	log.Fatal(http.ListenAndServe(":9990", myRouter))
 }
