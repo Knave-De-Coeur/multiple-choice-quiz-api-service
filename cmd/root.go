@@ -55,7 +55,7 @@ type User struct {
 	Username         string `json:"Username"`
 	Password         string `json:"Password"`
 	SubmittedAnswers []rune `json:"SubmittedAnswers"`
-	Score            int8    `json:"Score"`
+	Score            int    `json:"Score"`
 }
 
 // LoginRequest is the parsed struct of the /login endpoint
@@ -92,7 +92,7 @@ type SubmitAnswersRequest struct {
 // CompareUsersRequest is the struct we parse and send over to the /compare-your-score endpoint
 type CompareUsersRequest struct {
 	UserID    int `json:"UserID"`
-	UserScore int8 `json:"UserScore"`
+	UserScore int `json:"UserScore"`
 }
 
 // ListOfQuestions will hold the a list of Question structs to be displayed and evaluated
@@ -622,9 +622,7 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	} else {
 		x := getUserComparisonScore(user, compareUsersRequest.UserScore)
 
-		fmt.Println(x)
 		negative := math.Signbit(x)
-		fmt.Printf("is negative: %v \n", negative)
 
 		userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
 
@@ -703,11 +701,11 @@ func searchUsersByID(ID int) User {
 	return user
 }
 
-func getUserComparisonScore(currentUser User, userScore int8) float64 {
+func getUserComparisonScore(currentUser User, userScore int) float64 {
 
-	listOfScores := []int8{}
+	listOfScores := []int{}
 
-	var sumPercentages int8
+	var sumPercentages int
 
 	for i := range ListOfUsers {
 		if ListOfUsers[i].ID != currentUser.ID {
@@ -718,11 +716,8 @@ func getUserComparisonScore(currentUser User, userScore int8) float64 {
 	}
 
 	averagePercentage := (float64(sumPercentages) / (float64(len(listOfScores))))
-	fmt.Printf("average percenatge : %v \n", averagePercentage)
 
 	userScorePrecentage := float64(currentUser.Score * 20)
-	fmt.Printf("user percenatge : %v \n", userScorePrecentage)
-
 
 	x := userScorePrecentage - averagePercentage
 
