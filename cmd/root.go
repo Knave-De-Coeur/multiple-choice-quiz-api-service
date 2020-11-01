@@ -19,7 +19,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -29,7 +28,6 @@ import (
 	"os"
 	"sort"
 
-	// "reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +43,9 @@ import (
 
 // Host is the hostname that we'll eb perforing rest requests to.
 const Host = "http://localhost"
+
+// DefaultPort is the fallback port when it is not entered as arg 
+const DefaultPort = "9990"
 
 // User is generic user that launches and signs up
 type User struct {
@@ -118,14 +119,18 @@ var rootCmd = &cobra.Command{
 	Long: `This is simple quiz where the user is prese ted with a couple questions
 			and they have to select one from three to get the right answer.`,
 	Args: func(cmd *cobra.Command, args []string) error {
+		Port = ""
 		if len(args) < 1 {
-			return errors.New("requires a port")
+			Port = DefaultPort
+		} else {
+			Port = args[0]
 		}
-		checkAndAssignPort(args[0])
+		checkAndAssignPort(Port)
 		return nil
 	},
 
 	Run: func(cmd *cobra.Command, args []string) {
+
 		generateQuestions()  // sets questions
 		generateDummyUsers() // sets users
 
@@ -377,24 +382,33 @@ func createUser(reader *bufio.Reader) bool {
 	}
 
 	fmt.Println("Start creating your profile.")
-	fmt.Println("Enter Full Name: ")
-	newUser.Name, _ = reader.ReadString('\n')
+	
+	for {
+		fmt.Println("Enter Full Name: ")
+		newUser.Name, _ = reader.ReadString('\n')
 
-	fmt.Println("Enter your age: ")
-	rawAge, _ := reader.ReadString('\n')
-	intAge, _ := strconv.ParseInt(rawAge, 3, 8)
-	newUser.Age = int8(intAge)
+		fmt.Println("Enter your age: ")
+		rawAge, _ := reader.ReadString('\n')
+		rawAge = strings.TrimSpace(rawAge)
+		intAge, _ := strconv.Atoi(rawAge)
+		newUser.Age = int8(intAge)
 
-	fmt.Println("Enter a Username: ")
-	newUser.Username, _ = reader.ReadString('\n')
-	fmt.Println("Enter a password: ")
-	newUser.Password, _ = reader.ReadString('\n')
+		fmt.Println("Enter a Username: ")
+		newUser.Username, _ = reader.ReadString('\n')
+		fmt.Println("Enter a password: ")
+		newUser.Password, _ = reader.ReadString('\n')
 
-	newUser.Name = strings.TrimSpace(newUser.Name)
-	newUser.Username = strings.TrimSpace(newUser.Username)
-	newUser.Password = strings.TrimSpace(newUser.Password)
+		newUser.Name = strings.TrimSpace(newUser.Name)
+		newUser.Username = strings.TrimSpace(newUser.Username)
+		newUser.Password = strings.TrimSpace(newUser.Password)
 
-	return postToEndpoint(newUser, "new-player")
+		if postToEndpoint(newUser, "new-player") {
+			break;
+		}
+		
+	}
+
+	return true
 }
 
 // This will check the users input and set the CurrentUser
@@ -468,7 +482,7 @@ func login(res http.ResponseWriter, req *http.Request) {
 
 	currentUser := searchUsersForUsername(loginReq.Username)
 
-	found := false
+	foundError := false
 	message := ""
 	if currentUser.ID == 0 {
 		message = "User not found: " + loginReq.Username
@@ -476,13 +490,13 @@ func login(res http.ResponseWriter, req *http.Request) {
 		message = "Password is wrong try again."
 	} else {
 		CurrentUserID = currentUser.ID
-		found = true
+		foundError = true
 		message = "Sucessfully logged in with user: " + currentUser.Username
 	}
 
 	messageResponse := Response{
 		message,
-		found,
+		foundError,
 	}
 
 	json.NewEncoder(res).Encode(messageResponse)
@@ -504,8 +518,6 @@ func logout(res http.ResponseWriter, req *http.Request) {
 		foundError = true
 	}
 
-	fmt.Printf("Removing logged in userId: %v \n", CurrentUserID)
-
 	CurrentUserID = 0
 
 	resMessage := Response{
@@ -521,9 +533,32 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 	var newPlayer User
 	json.Unmarshal(reqBody, &newPlayer)
-	ListOfUsers = append(ListOfUsers, newPlayer)
-	fmt.Println("Player with username: " + newPlayer.Username + " added!")
-	json.NewEncoder(res).Encode(newPlayer)
+
+	message := ""
+	errorFound := false
+	for _, u := range ListOfUsers {
+		if newPlayer.Username == u.Username {
+			message = "Username " + u.Username + " is taken please try again."
+			errorFound = true
+		} else if newPlayer.Password == u.Password {
+			message = "Please provide a different password"
+			errorFound = true
+		}
+	}
+
+	newPlayer.SubmittedAnswers = []rune{}
+
+	if !errorFound {
+		ListOfUsers = append(ListOfUsers, newPlayer)
+		message = "User by username: " + newPlayer.Username + " has been successfully added!"
+	}
+
+	responseMessage := Response{
+		message,
+		errorFound,
+	}
+
+	json.NewEncoder(res).Encode(responseMessage)
 }
 
 // GET rest endpoint func that simply displays list of users in json
@@ -577,22 +612,32 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	var compareUsersRequest CompareUsersRequest
 	json.Unmarshal(reqBody, &compareUsersRequest)
 
-	x := getUserComparisonScore(searchUsersByID(compareUsersRequest.UserID), compareUsersRequest.UserScore)
+	user := searchUsersByID(compareUsersRequest.UserID)
 
-	negative := math.Signbit(x)
 	message := ""
-
-	userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
-
-	if negative {
-		message = "You did " + userScoreComparison + "% worse than everyone!"
+	errorFound := false
+	if len(user.SubmittedAnswers) < 1 {
+		message = "Start playing to compare results!"
+		errorFound = true
 	} else {
-		message = "You did " + userScoreComparison + "% better than everyone!"
+		x := getUserComparisonScore(user, compareUsersRequest.UserScore)
+
+		fmt.Println(x)
+		negative := math.Signbit(x)
+		fmt.Printf("is negative: %v \n", negative)
+
+		userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
+
+		if negative {
+			message = "You did " + userScoreComparison + "% worse than everyone!"
+		} else {
+			message = "You did " + userScoreComparison + "% better than everyone!"
+		}
 	}
 
 	responseMessage := Response{
 		message,
-		false,
+		errorFound,
 	}
 
 	json.NewEncoder(res).Encode(responseMessage)
@@ -658,35 +703,12 @@ func searchUsersByID(ID int) User {
 	return user
 }
 
-// TODO: finish this
-// func searchUsersByProp(property string, value interface{}) User {
-// 	user := User{}
-// 	for i := range ListOfUsers {
-// 		rv := reflect.ValueOf(ListOfUsers[i])
-
-// 		rv = rv.Elem()
-
-// 		field := rv.FieldByName(property)
-
-// 		if !field.IsValid() {
-// 			fmt.Errorf("not a field name: %s", property)
-// 		}
-
-// 		if field == value {
-// 			user = ListOfUsers[i]
-// 			break
-// 		}
-// 	}
-
-// 	return user
-// }
-
 func getUserComparisonScore(currentUser User, userScore int8) float64 {
 
 	listOfScores := []int8{}
 
 	var sumPercentages int8
-	
+
 	for i := range ListOfUsers {
 		if ListOfUsers[i].ID != currentUser.ID {
 			scorePercentage := (ListOfUsers[i].Score * 20)
@@ -696,8 +718,11 @@ func getUserComparisonScore(currentUser User, userScore int8) float64 {
 	}
 
 	averagePercentage := (float64(sumPercentages) / (float64(len(listOfScores))))
+	fmt.Printf("average percenatge : %v \n", averagePercentage)
 
 	userScorePrecentage := float64(currentUser.Score * 20)
+	fmt.Printf("user percenatge : %v \n", userScorePrecentage)
+
 
 	x := userScorePrecentage - averagePercentage
 
