@@ -19,12 +19,15 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
+	"sort"
 
 	// "reflect"
 	"strconv"
@@ -40,8 +43,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Endpoint is the hostname that we'll eb perforing rest requests to.
-const Endpoint = "http://localhost:9990"
+// Host is the hostname that we'll eb perforing rest requests to.
+const Host = "http://localhost"
 
 // User is generic user that launches and signs up
 type User struct {
@@ -103,6 +106,12 @@ var CurrentUserID int
 // Reader is the gloabl input reader for the application
 var Reader bufio.Reader
 
+// Port is the port number the server will run on, defined as an arg in the app launch
+var Port string
+
+// Endpoint is the host and port conactinated
+var Endpoint string
+
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
@@ -111,6 +120,15 @@ var rootCmd = &cobra.Command{
 	Short: "My test for Fast Track",
 	Long: `This is simple quiz where the user is prese ted with a couple questions
 			and they have to select one from three to get the right answer.`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return errors.New("requires a port")
+		}
+		checkPort(Host, args[0])
+		Port = args[0]
+		Endpoint = Host + ":" + Port
+		return nil
+	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
@@ -128,6 +146,19 @@ var rootCmd = &cobra.Command{
 
 		wg.Wait()
 	},
+}
+
+func checkPort(host string, port string) {
+	fmt.Println("host: " + host)
+	fmt.Println("port: " + port)
+	ln, err := net.Listen("tcp", ":"+port)
+
+	if err != nil {
+		fmt.Errorf("Can't listen on port %q: %s", port, err)
+		os.Exit(1)
+	}
+
+	ln.Close()
 }
 
 func runGame() {
@@ -298,12 +329,18 @@ func play(reader *bufio.Reader) bool {
 	check(err)
 
 	if len(key) > 0 {
-		fmt.Println(ListOfQuestions)
 		listOfSubmittedRunes := []rune{}
 		for _, q := range ListOfQuestions {
 			fmt.Println("Qustion: " + string(q.ID) + " " + q.Description)
-			for key, question := range q.AnswerSelection {
-				fmt.Println(string(key) + ": " + question)
+			keys := make([]string, 0, len(q.AnswerSelection))
+			for k := range q.AnswerSelection {
+				keys = append(keys, string(k))
+			}
+			sort.Strings(keys)
+			fmt.Println(keys)
+			for _, option := range keys {
+				runekey := []rune(option)
+				fmt.Printf("%v: %v \n", option, q.AnswerSelection[runekey[0]])
 			}
 			submittedAnswer, err := reader.ReadString('\n')
 			check(err)
@@ -666,7 +703,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
 	myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
-	log.Fatal(http.ListenAndServe(":9990", myRouter))
+	log.Fatal(http.ListenAndServe(":"+Port, myRouter))
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -690,6 +727,9 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	rootCmd.PersistentFlags().StringVarP(&Port, "port", "p", "", "This is the port the application server will run on.")
+	rootCmd.MarkFlagRequired("port")
 }
 
 // initConfig reads in config file and ENV variables if set.
