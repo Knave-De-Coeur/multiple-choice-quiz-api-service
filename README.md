@@ -36,6 +36,18 @@ The game itself consists of only 5 questions and the user must answer them all i
 
 --- 
 
+### Set up 
+
+Once this has been placed in your `$GOROOT` dir simply run 
+
+```
+go install ft-quiz
+```
+
+Which will create the binary on your machine, at which point you can follow the Run application section below.
+
+---
+
 ### Running application
 
 Run the application with:
