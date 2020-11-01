@@ -54,7 +54,7 @@ type User struct {
 	Username         string `json:"Username"`
 	Password         string `json:"Password"`
 	SubmittedAnswers []rune `json:"SubmittedAnswers"`
-	Score            int    `json:"Score"`
+	Score            int8    `json:"Score"`
 }
 
 // LoginRequest is the parsed struct of the /login endpoint
@@ -91,7 +91,7 @@ type SubmitAnswersRequest struct {
 // CompareUsersRequest is the struct we parse and send over to the /compare-your-score endpoint
 type CompareUsersRequest struct {
 	UserID    int `json:"UserID"`
-	UserScore int `json:"UserScore"`
+	UserScore int8 `json:"UserScore"`
 }
 
 // ListOfQuestions will hold the a list of Question structs to be displayed and evaluated
@@ -352,7 +352,7 @@ func play(reader *bufio.Reader) bool {
 				answerRune := []rune(submittedAnswer)[0]
 				fmt.Println("answer submitted: " + string(answerRune))
 				listOfSubmittedRunes = append(listOfSubmittedRunes, answerRune)
-				break;
+				break
 			}
 		}
 		fmt.Println("Evaluating answers...")
@@ -413,7 +413,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 	return postToEndpoint(loginRequest, "login")
 }
 
-// Console function to post to logout endpoint by taking the CurrentUserID 
+// Console function to post to logout endpoint by taking the CurrentUserID
 func logoutPrompt() bool {
 	logoutRequest := LogoutRequest{
 		UserID: CurrentUserID,
@@ -435,7 +435,7 @@ func compare() bool {
 }
 
 // Grouped logic that posts to enpoint and recieves message to be outputted to the console
-func postToEndpoint(data interface {}, endpoint string) bool {
+func postToEndpoint(data interface{}, endpoint string) bool {
 	requestJSON, _ := json.Marshal(data)
 
 	res, err := http.Post(FullHostname+endpoint, "application/json", bytes.NewBuffer(requestJSON))
@@ -489,7 +489,6 @@ func login(res http.ResponseWriter, req *http.Request) {
 
 }
 
-
 // Logout endpoint function that simply removes the CurrentUserID
 func logout(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
@@ -532,32 +531,28 @@ func showPlayers(res http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(res).Encode(ListOfUsers)
 }
 
-// This is one of the enppoint functions that stores the users submitted answers, then 
-// Sets the users score and response with a Response sruct parsed into json 
+// This is one of the enppoint functions that stores the users submitted answers, then
+// Sets the users score and response with a Response sruct parsed into json
 func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
 	var submitAnswerRequest SubmitAnswersRequest
 	json.Unmarshal(reqBody, &submitAnswerRequest)
 
-	currentUser := User{}
-
-	// set or re-set the users answers
-	for _, u := range ListOfUsers {
-		if u.ID == submitAnswerRequest.UserID {
-			u.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
-			currentUser = u
-			break
-		}
-	}
+	currentUser := searchUsersByID(submitAnswerRequest.UserID)
+	currentUser.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
+	currentUser.Score = 0
 
 	for i := range ListOfQuestions {
+		fmt.Printf("Actual: %v vs Submitted: %v \n", ListOfQuestions[i].CorrectAnswer, currentUser.SubmittedAnswers[i])
 		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
 			currentUser.Score++
 		}
 	}
 
-	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+	updateUser(currentUser)
+
+	message := "You have answered " + strconv.Itoa(int(currentUser.Score)) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
 
 	responseMessage := Response{
 		message,
@@ -565,6 +560,15 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	}
 
 	json.NewEncoder(res).Encode(responseMessage)
+}
+
+// This updates the user answers in memory
+func updateUser(user User) {
+	for i, u := range ListOfUsers {
+		if u.ID == user.ID {
+			ListOfUsers[i] = user
+		}
+	}
 }
 
 // Compare stats endpoint funct that returns the message with how the user did compared to others
@@ -578,7 +582,7 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	negative := math.Signbit(x)
 	message := ""
 
-	userScoreComparison := strconv.FormatFloat(x, 'f', 4, 64)
+	userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
 
 	if negative {
 		message = "You did " + userScoreComparison + "% worse than everyone!"
@@ -599,11 +603,11 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 // Simply check that the answer the user inputted exits
 func isAnswerValid(answers []string, submittedAnswer string) bool {
 	for _, item := range answers {
-        if item == submittedAnswer {
-            return true
-        }
-    }
-    return false
+		if item == submittedAnswer {
+			return true
+		}
+	}
+	return false
 }
 
 // This simply checks if the port is availble and assigns it the the global variables
@@ -677,28 +681,24 @@ func searchUsersByID(ID int) User {
 // 	return user
 // }
 
-func getUserComparisonScore(currentUser User, userScore int) float64 {
+func getUserComparisonScore(currentUser User, userScore int8) float64 {
 
-	listOfScores := []int{}
+	listOfScores := []int8{}
 
-	sumPercentages := 0
-	// step1: get individual percentages
+	var sumPercentages int8
+	
 	for i := range ListOfUsers {
 		if ListOfUsers[i].ID != currentUser.ID {
 			scorePercentage := (ListOfUsers[i].Score * 20)
 			sumPercentages += scorePercentage
-			listOfScores = append(listOfScores, scorePercentage) // since we're dealing with 5 questions
+			listOfScores = append(listOfScores, scorePercentage) 
 		}
 	}
 
-	// step2 : get average
 	averagePercentage := (float64(sumPercentages) / (float64(len(listOfScores))))
-	fmt.Printf("Average percentage: %v \n", averagePercentage)
-	// step3 : get your percentage
-	userScorePrecentage := float64(currentUser.Score * 20)
-	fmt.Printf("User score percentage: %v \n", userScorePrecentage)
 
-	// step4 subtract
+	userScorePrecentage := float64(currentUser.Score * 20)
+
 	x := userScorePrecentage - averagePercentage
 
 	return x
