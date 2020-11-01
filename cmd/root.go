@@ -317,55 +317,6 @@ func generateDummyUsers() {
 	}
 }
 
-
-
-// Simply check that the answer the user inputted exits
-func isAnswerValid(answers []string, submittedAnswer string) bool {
-	for _, item := range answers {
-        if item == submittedAnswer {
-            return true
-        }
-    }
-    return false
-}
-
-// This is one of the enppoint functions that stores the users submitted answers, then 
-// Sets the users score and response with a Response sruct parsed into json 
-func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-
-	var submitAnswerRequest SubmitAnswersRequest
-	json.Unmarshal(reqBody, &submitAnswerRequest)
-
-	currentUser := User{}
-
-	// set or re-set the users answers
-	for _, u := range ListOfUsers {
-		if u.ID == submitAnswerRequest.UserID {
-			u.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
-			currentUser = u
-			break
-		}
-	}
-
-	for i := range ListOfQuestions {
-		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
-			currentUser.Score++
-		}
-	}
-
-	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
-
-	responseMessage := Response{
-		message,
-		false,
-	}
-
-	json.NewEncoder(res).Encode(responseMessage)
-}
-
-
-
 // CONSOLE FUNCITONS
 
 // This is the gamplay section, loops through each question, outputting the questions and possible answers
@@ -412,32 +363,21 @@ func play(reader *bufio.Reader) bool {
 			listOfSubmittedRunes,
 		}
 
-		requestJSON, _ := json.Marshal(submitAnswerRequest)
-
-		res, err := http.Post(FullHostname+"submit-answer", "application/json", bytes.NewBuffer(requestJSON))
-		check(err)
-
-		defer res.Body.Close()
-
-		var responseMessage Response
-
-		json.NewDecoder(res.Body).Decode(&responseMessage)
-
-		fmt.Println(responseMessage.Message)
+		postToEndpoint(submitAnswerRequest, "submit-answer")
 
 	}
 
 	return true
 }
 
-func createUser(reader *bufio.Reader) {
+func createUser(reader *bufio.Reader) bool {
 	uid := len(ListOfUsers) + 1
 	newUser := User{
 		ID: uid,
 	}
 
 	fmt.Println("Start creating your profile.")
-	fmt.Println("Enter Name: ")
+	fmt.Println("Enter Full Name: ")
 	newUser.Name, _ = reader.ReadString('\n')
 
 	fmt.Println("Enter your age: ")
@@ -454,12 +394,7 @@ func createUser(reader *bufio.Reader) {
 	newUser.Username = strings.TrimSpace(newUser.Username)
 	newUser.Password = strings.TrimSpace(newUser.Password)
 
-	userJSON, _ := json.Marshal(newUser)
-
-	res, err := http.Post(FullHostname+"new-player", "application/json", bytes.NewBuffer(userJSON))
-	check(err)
-
-	defer res.Body.Close()
+	return postToEndpoint(newUser, "new-player")
 }
 
 // This will check the users input and set the CurrentUser
@@ -475,42 +410,16 @@ func loginPrompt(reader *bufio.Reader) bool {
 		inputtedPassword,
 	}
 
-	loginRequestJSON, _ := json.Marshal(loginRequest)
-
-	res, err := http.Post(FullHostname+"login", "application/json", bytes.NewBuffer(loginRequestJSON))
-	check(err)
-
-	defer res.Body.Close()
-
-	var responseMessage Response
-
-	json.NewDecoder(res.Body).Decode(&responseMessage)
-
-	fmt.Printf("response of login is: %v \n", responseMessage.Message)
-
-	return !responseMessage.Error
+	return postToEndpoint(loginRequest, "login")
 }
 
 // Console function to post to logout endpoint by taking the CurrentUserID 
 func logoutPrompt() bool {
-	logout := LogoutRequest{
+	logoutRequest := LogoutRequest{
 		UserID: CurrentUserID,
 	}
 
-	logoutRequestJSON, _ := json.Marshal(logout)
-
-	res, err := http.Post(FullHostname+"logout", "application/json", bytes.NewBuffer(logoutRequestJSON))
-	check(err)
-
-	defer res.Body.Close()
-
-	var responseMessage Response
-
-	json.NewDecoder(res.Body).Decode(&responseMessage)
-
-	fmt.Println(responseMessage.Message)
-
-	return !responseMessage.Error
+	return postToEndpoint(logoutRequest, "logout")
 }
 
 // Compare console func that simply posts to the enpoint and displays the message
@@ -522,27 +431,14 @@ func compare() bool {
 		UserScore: currentUser.Score,
 	}
 
-	requestJSON, _ := json.Marshal(requestData)
-
-	res, err := http.Post(FullHostname+"compare-your-score", "application/json", bytes.NewBuffer(requestJSON))
-	check(err)
-
-	defer res.Body.Close()
-
-	var responseMessage Response
-
-	json.NewDecoder(res.Body).Decode(&responseMessage)
-
-	fmt.Println(responseMessage.Message)
-
-	return !responseMessage.Error
+	return postToEndpoint(requestData, "compare-your-score")
 }
 
 // Grouped logic that posts to enpoint and recieves message to be outputted to the console
 func postToEndpoint(data interface {}, endpoint string) bool {
 	requestJSON, _ := json.Marshal(data)
 
-	res, err := http.Post(FullHostname+"endpoint", "application/json", bytes.NewBuffer(requestJSON))
+	res, err := http.Post(FullHostname+endpoint, "application/json", bytes.NewBuffer(requestJSON))
 	check(err)
 
 	defer res.Body.Close()
@@ -636,6 +532,41 @@ func showPlayers(res http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(res).Encode(ListOfUsers)
 }
 
+// This is one of the enppoint functions that stores the users submitted answers, then 
+// Sets the users score and response with a Response sruct parsed into json 
+func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var submitAnswerRequest SubmitAnswersRequest
+	json.Unmarshal(reqBody, &submitAnswerRequest)
+
+	currentUser := User{}
+
+	// set or re-set the users answers
+	for _, u := range ListOfUsers {
+		if u.ID == submitAnswerRequest.UserID {
+			u.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
+			currentUser = u
+			break
+		}
+	}
+
+	for i := range ListOfQuestions {
+		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
+			currentUser.Score++
+		}
+	}
+
+	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+
+	responseMessage := Response{
+		message,
+		false,
+	}
+
+	json.NewEncoder(res).Encode(responseMessage)
+}
+
 // Compare stats endpoint funct that returns the message with how the user did compared to others
 func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
@@ -664,6 +595,16 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 }
 
 // HELPER FUNCTIONS
+
+// Simply check that the answer the user inputted exits
+func isAnswerValid(answers []string, submittedAnswer string) bool {
+	for _, item := range answers {
+        if item == submittedAnswer {
+            return true
+        }
+    }
+    return false
+}
 
 // This simply checks if the port is availble and assigns it the the global variables
 func checkAndAssignPort(port string) {
