@@ -131,17 +131,20 @@ var rootCmd = &cobra.Command{
 
 	Run: func(cmd *cobra.Command, args []string) {
 
-		generateQuestions()  // sets questions
-		generateDummyUsers() // sets users
+		// sets questions
+		generateQuestions()  
+		// sets users
+		generateDummyUsers() 
 
-		// create new wait group
 		wg := new(sync.WaitGroup)
 
-		// add two goroutines
 		wg.Add(2)
 
-		go handleRequests() // sets endpoints
-		go runGame()        // runs game
+		// creates server and sets endpoints
+		go handleRequests()
+
+		// runs game
+		go runGame()        
 
 		wg.Wait()
 	},
@@ -162,7 +165,7 @@ func handleRequests() {
 
 // This is one of the main goroutines of the application that actually rund the user interface part
 func runGame() {
-	fmt.Println("Welcome to Alex's quiz! Press any key followed by enter to begin.")
+	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
 
 	reader := bufio.NewReader(os.Stdin)
 	key, _ := reader.ReadString('\n')
@@ -375,6 +378,7 @@ func play(reader *bufio.Reader) bool {
 	return true
 }
 
+// Console input and logic to set user to post to endpoint
 func createUser(reader *bufio.Reader) bool {
 	uid := len(ListOfUsers) + 1
 	newUser := User{
@@ -579,7 +583,6 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	currentUser.Score = 0
 
 	for i := range ListOfQuestions {
-		fmt.Printf("Actual: %v vs Submitted: %v \n", ListOfQuestions[i].CorrectAnswer, currentUser.SubmittedAnswers[i])
 		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
 			currentUser.Score++
 		}
@@ -675,6 +678,7 @@ func check(e error) {
 	}
 }
 
+// Goes through lists of users and returns the user with the correct username or nothing 
 func searchUsersForUsername(userName string) User {
 	user := User{}
 
@@ -688,6 +692,7 @@ func searchUsersForUsername(userName string) User {
 	return user
 }
 
+// Goes through list of users and returns user with correct ID or nothing
 func searchUsersByID(ID int) User {
 	user := User{}
 
@@ -701,6 +706,7 @@ func searchUsersByID(ID int) User {
 	return user
 }
 
+// This calculates the comparison percentage the user has from other users
 func getUserComparisonScore(currentUser User, userScore int) float64 {
 
 	listOfScores := []int{}
