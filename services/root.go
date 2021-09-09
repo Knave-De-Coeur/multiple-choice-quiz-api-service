@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
+package services
 
 import (
 	"bufio"
@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"os"
 	"sort"
-
 	"strconv"
 	"strings"
 	"sync"
@@ -37,14 +36,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
 // Host is the hostname that we'll eb perforing rest requests to.
 const Host = "http://localhost"
 
-// DefaultPort is the fallback port when it is not entered as arg 
+// DefaultPort is the fallback port when it is not entered as arg
 const DefaultPort = "9990"
 
 // User is generic user that launches and signs up
@@ -132,9 +131,9 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		// sets questions
-		generateQuestions()  
+		generateQuestions()
 		// sets users
-		generateDummyUsers() 
+		generateDummyUsers()
 
 		wg := new(sync.WaitGroup)
 
@@ -144,7 +143,7 @@ var rootCmd = &cobra.Command{
 		go handleRequests()
 
 		// runs game
-		go runGame()        
+		go runGame()
 
 		wg.Wait()
 	},
@@ -386,7 +385,7 @@ func createUser(reader *bufio.Reader) bool {
 	}
 
 	fmt.Println("Start creating your profile.")
-	
+
 	for {
 		fmt.Println("Enter Full Name: ")
 		newUser.Name, _ = reader.ReadString('\n')
@@ -407,9 +406,9 @@ func createUser(reader *bufio.Reader) bool {
 		newUser.Password = strings.TrimSpace(newUser.Password)
 
 		if postToEndpoint(newUser, "new-player") {
-			break;
+			break
 		}
-		
+
 	}
 
 	return true
@@ -678,7 +677,7 @@ func check(e error) {
 	}
 }
 
-// Goes through lists of users and returns the user with the correct username or nothing 
+// Goes through lists of users and returns the user with the correct username or nothing
 func searchUsersForUsername(userName string) User {
 	user := User{}
 
@@ -717,7 +716,7 @@ func getUserComparisonScore(currentUser User, userScore int) float64 {
 		if ListOfUsers[i].ID != currentUser.ID {
 			scorePercentage := (ListOfUsers[i].Score * 20)
 			sumPercentages += scorePercentage
-			listOfScores = append(listOfScores, scorePercentage) 
+			listOfScores = append(listOfScores, scorePercentage)
 		}
 	}
 
