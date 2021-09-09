@@ -1,18 +1,3 @@
-/*
-Package cmd Copyright © 2020 NAME HERE <alexanderm.1496@gmail.com>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package services
 
 import (
@@ -40,7 +25,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Host is the hostname that we'll eb perforing rest requests to.
+// Host is the hostname that we'll eb performing rest requests to.
 const Host = "http://localhost"
 
 // DefaultPort is the fallback port when it is not entered as arg
@@ -68,7 +53,7 @@ type LogoutRequest struct {
 	UserID int
 }
 
-// Response is what is returned from the endpoints should an error occurr
+// Response is what is returned from the endpoints should an error occur
 type Response struct {
 	Message string `json:"Message"`
 	Error   bool   `json:"Password"`
@@ -94,19 +79,19 @@ type CompareUsersRequest struct {
 	UserScore int `json:"UserScore"`
 }
 
-// ListOfQuestions will hold the a list of Question structs to be displayed and evaluated
+// ListOfQuestions will hold a list of Question structs to be displayed and evaluated
 var ListOfQuestions []Question
 
 // ListOfUsers all the players that have registered to the quiz
 var ListOfUsers []User
 
-// CurrentUserID The logged in user id interacting with the application
+// CurrentUserID The logged-in user id interacting with the application
 var CurrentUserID int
 
 // Port is the port number the server will run on, defined as an arg in the app launch
 var Port string
 
-// FullHostname is the host and port conactinated
+// FullHostname is the host and port concatenated
 var FullHostname string
 
 var cfgFile string
@@ -115,7 +100,7 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use:   "ft-quiz",
 	Short: "My test for Fast Track",
-	Long: `This is simple quiz where the user is prese ted with a couple questions
+	Long: `This is simple quiz where the user is presses ted with a couple questions
 			and they have to select one from three to get the right answer.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		Port = ""
@@ -130,7 +115,7 @@ var rootCmd = &cobra.Command{
 
 	Run: func(cmd *cobra.Command, args []string) {
 
-		// sets questions
+		// sets the questions up
 		generateQuestions()
 		// sets users
 		generateDummyUsers()
@@ -149,7 +134,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// This sets up the server and the endpoints
+// handleRequests sets up the server and the endpoints
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homePage)
@@ -162,7 +147,7 @@ func handleRequests() {
 	log.Fatal(http.ListenAndServe(":"+Port, myRouter))
 }
 
-// This is one of the main goroutines of the application that actually rund the user interface part
+// This is one of the main goroutines of the application that runs the user interface part
 func runGame() {
 	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
 
@@ -185,16 +170,12 @@ func runGame() {
 				switch option[0] {
 				case 'a':
 					createUser(reader)
-					break
 				case 'b':
 					loginPrompt(reader)
-					break
 				case 'c':
 					os.Exit(0)
-					break
 				default:
 					fmt.Println("Invalid try again")
-					break
 				}
 			} else {
 				fmt.Println("a: Play")
@@ -209,19 +190,14 @@ func runGame() {
 				switch option[0] {
 				case 'a':
 					play(reader)
-					break
 				case 'b':
 					logoutPrompt()
-					break
 				case 'c':
 					compare()
-					break
 				case 'd':
 					os.Exit(0)
-					break
 				default:
 					fmt.Println("Invalid try again")
-					break
 				}
 			}
 
@@ -229,7 +205,7 @@ func runGame() {
 	}
 }
 
-// This imply populates the ListOfQuestions with dummy data
+// This populates the ListOfQuestions with dummy data
 func generateQuestions() {
 	ListOfQuestions = []Question{
 		{
@@ -324,9 +300,9 @@ func generateDummyUsers() {
 	}
 }
 
-// CONSOLE FUNCITONS
+// CONSOLE FUNCTIONS
 
-// This is the gamplay section, loops through each question, outputting the questions and possible answers
+// This is the gameplay section, loops through each question, outputting the questions and possible answers
 // Will wait for user input and go to the next question, once they're all answered it posts to get the result
 func play(reader *bufio.Reader) bool {
 	fmt.Printf("Press any key followed by enter to start the game you have %v questions \n", len(ListOfQuestions))
@@ -337,9 +313,9 @@ func play(reader *bufio.Reader) bool {
 	check(err)
 
 	if len(key) > 0 {
-		listOfSubmittedRunes := []rune{}
+		var listOfSubmittedRunes []rune
 		for _, q := range ListOfQuestions {
-			fmt.Println("Qustion: " + string(q.ID) + " " + q.Description)
+			fmt.Printf("Question: %d %s", q.ID, q.Description)
 			questionKeyStrings := make([]string, 0, len(q.AnswerSelection))
 			for k := range q.AnswerSelection {
 				questionKeyStrings = append(questionKeyStrings, string(k))
@@ -347,8 +323,8 @@ func play(reader *bufio.Reader) bool {
 			sort.Strings(questionKeyStrings)
 			for {
 				for _, option := range questionKeyStrings {
-					runekey := []rune(option)
-					fmt.Printf("%v: %v \n", option, q.AnswerSelection[runekey[0]])
+					runeKey := []rune(option)
+					fmt.Printf("%v: %v \n", option, q.AnswerSelection[runeKey[0]])
 				}
 				submittedAnswer, err := reader.ReadString('\n')
 				check(err)
@@ -430,7 +406,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 	return postToEndpoint(loginRequest, "login")
 }
 
-// Console function to post to logout endpoint by taking the CurrentUserID
+// Console function to post to log-out endpoint by taking the CurrentUserID
 func logoutPrompt() bool {
 	logoutRequest := LogoutRequest{
 		UserID: CurrentUserID,
@@ -439,7 +415,7 @@ func logoutPrompt() bool {
 	return postToEndpoint(logoutRequest, "logout")
 }
 
-// Compare console func that simply posts to the enpoint and displays the message
+// Compare console func that simply posts to the endpoint and displays the message
 func compare() bool {
 	currentUser := searchUsersByID(CurrentUserID)
 
@@ -451,7 +427,7 @@ func compare() bool {
 	return postToEndpoint(requestData, "compare-your-score")
 }
 
-// Grouped logic that posts to enpoint and recieves message to be outputted to the console
+// Grouped logic that posts to endpoint and receives message to be outputted to the console
 func postToEndpoint(data interface{}, endpoint string) bool {
 	requestJSON, _ := json.Marshal(data)
 
@@ -462,7 +438,7 @@ func postToEndpoint(data interface{}, endpoint string) bool {
 
 	var responseMessage Response
 
-	json.NewDecoder(res.Body).Decode(&responseMessage)
+	_ = json.NewDecoder(res.Body).Decode(&responseMessage)
 
 	fmt.Println(responseMessage.Message)
 
@@ -472,16 +448,16 @@ func postToEndpoint(data interface{}, endpoint string) bool {
 // REST FUNCTIONS
 
 // One of the endpoints that shows the homepage
-func homePage(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(res, "Welcome to the HomePage! Go to the console to start playing.")
+func homePage(res http.ResponseWriter, _ *http.Request) {
+	_, _ = fmt.Fprintf(res, "Welcome to the HomePage! Go to the console to start playing.")
 }
 
-// Login endpoint function that checks username and password and sets user appropraitely
+// Login endpoint function that checks username and password and sets user appropriately
 func login(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
 	var loginReq LoginRequest
-	json.Unmarshal(reqBody, &loginReq)
+	_ = json.Unmarshal(reqBody, &loginReq)
 
 	currentUser := searchUsersForUsername(loginReq.Username)
 
@@ -494,7 +470,7 @@ func login(res http.ResponseWriter, req *http.Request) {
 	} else {
 		CurrentUserID = currentUser.ID
 		foundError = true
-		message = "Sucessfully logged in with user: " + currentUser.Username
+		message = "Successfully logged in with user: " + currentUser.Username
 	}
 
 	messageResponse := Response{
@@ -502,7 +478,7 @@ func login(res http.ResponseWriter, req *http.Request) {
 		foundError,
 	}
 
-	json.NewEncoder(res).Encode(messageResponse)
+	_ = json.NewEncoder(res).Encode(messageResponse)
 
 }
 
@@ -511,7 +487,7 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
 	var logoutRequest LogoutRequest
-	json.Unmarshal(reqBody, &logoutRequest)
+	_ = json.Unmarshal(reqBody, &logoutRequest)
 
 	message := ""
 	foundError := false
@@ -528,14 +504,14 @@ func logout(res http.ResponseWriter, req *http.Request) {
 		foundError,
 	}
 
-	json.NewEncoder(res).Encode(resMessage)
+	_ = json.NewEncoder(res).Encode(resMessage)
 }
 
 // Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
 func addNewUser(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 	var newPlayer User
-	json.Unmarshal(reqBody, &newPlayer)
+	_ = json.Unmarshal(reqBody, &newPlayer)
 
 	message := ""
 	errorFound := false
@@ -561,21 +537,21 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 		errorFound,
 	}
 
-	json.NewEncoder(res).Encode(responseMessage)
+	_ = json.NewEncoder(res).Encode(responseMessage)
 }
 
 // GET rest endpoint func that simply displays list of users in json
-func showPlayers(res http.ResponseWriter, req *http.Request) {
-	json.NewEncoder(res).Encode(ListOfUsers)
+func showPlayers(res http.ResponseWriter, _ *http.Request) {
+	_ = json.NewEncoder(res).Encode(ListOfUsers)
 }
 
-// This is one of the enppoint functions that stores the users submitted answers, then
-// Sets the users score and response with a Response sruct parsed into json
+// This is one of the endpoint functions that stores the users submitted answers, then
+// Sets the users score and response with a Response struct parsed into json
 func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
 	var submitAnswerRequest SubmitAnswersRequest
-	json.Unmarshal(reqBody, &submitAnswerRequest)
+	_ = json.Unmarshal(reqBody, &submitAnswerRequest)
 
 	currentUser := searchUsersByID(submitAnswerRequest.UserID)
 	currentUser.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
@@ -589,14 +565,14 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 	updateUser(currentUser)
 
-	message := "You have answered " + strconv.Itoa(int(currentUser.Score)) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
 
 	responseMessage := Response{
 		message,
 		false,
 	}
 
-	json.NewEncoder(res).Encode(responseMessage)
+	_ = json.NewEncoder(res).Encode(responseMessage)
 }
 
 // This updates the user answers in memory
@@ -608,11 +584,11 @@ func updateUser(user User) {
 	}
 }
 
-// Compare stats endpoint funct that returns the message with how the user did compared to others
+// Compare stats endpoint func that returns the message with how the user did compare to others
 func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 	var compareUsersRequest CompareUsersRequest
-	json.Unmarshal(reqBody, &compareUsersRequest)
+	_ = json.Unmarshal(reqBody, &compareUsersRequest)
 
 	user := searchUsersByID(compareUsersRequest.UserID)
 
@@ -622,7 +598,7 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 		message = "Start playing to compare results!"
 		errorFound = true
 	} else {
-		x := getUserComparisonScore(user, compareUsersRequest.UserScore)
+		x := getUserComparisonScore(user)
 
 		negative := math.Signbit(x)
 
@@ -640,7 +616,7 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 		errorFound,
 	}
 
-	json.NewEncoder(res).Encode(responseMessage)
+	_ = json.NewEncoder(res).Encode(responseMessage)
 }
 
 // HELPER FUNCTIONS
@@ -655,7 +631,7 @@ func isAnswerValid(answers []string, submittedAnswer string) bool {
 	return false
 }
 
-// This simply checks if the port is availble and assigns it the the global variables
+// This simply checks if the port is available and assigns it to the global variables
 func checkAndAssignPort(port string) {
 	ln, err := net.Listen("tcp", ":"+port)
 
@@ -664,7 +640,7 @@ func checkAndAssignPort(port string) {
 		os.Exit(1)
 	}
 
-	ln.Close()
+	_ = ln.Close()
 
 	Port = port
 	FullHostname = Host + ":" + Port + "/"
@@ -706,25 +682,25 @@ func searchUsersByID(ID int) User {
 }
 
 // This calculates the comparison percentage the user has from other users
-func getUserComparisonScore(currentUser User, userScore int) float64 {
+func getUserComparisonScore(currentUser User) float64 {
 
-	listOfScores := []int{}
+	var listOfScores []int
 
 	var sumPercentages int
 
 	for i := range ListOfUsers {
 		if ListOfUsers[i].ID != currentUser.ID {
-			scorePercentage := (ListOfUsers[i].Score * 20)
+			scorePercentage := ListOfUsers[i].Score * 20
 			sumPercentages += scorePercentage
 			listOfScores = append(listOfScores, scorePercentage)
 		}
 	}
 
-	averagePercentage := (float64(sumPercentages) / (float64(len(listOfScores))))
+	averagePercentage := float64(sumPercentages) / (float64(len(listOfScores)))
 
-	userScorePrecentage := float64(currentUser.Score * 20)
+	scorePercentage := float64(currentUser.Score * 20)
 
-	x := userScorePrecentage - averagePercentage
+	x := scorePercentage - averagePercentage
 
 	return x
 }
