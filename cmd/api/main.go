@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/Knave-De-Coeur/Quiz-API-Service/services"
+	"quiz-api-service/services"
 )
 
 func main() {

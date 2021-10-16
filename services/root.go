@@ -743,9 +743,9 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".multiple-choice-quiz-api-service" (without extension).
+		// Search config in home directory with name ".quiz-api-service" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".multiple-choice-quiz-api-service")
+		viper.SetConfigName(".quiz-api-service")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

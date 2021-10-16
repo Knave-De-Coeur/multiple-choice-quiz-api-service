@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  app:
+    image: golang:1.17
+    container_name: quiz-api-service
+    build: ./
+    ports:
+      - "8000:8000"
+      - "40000:40000"
+    security_opt:
+      - "seccomp:unconfined"
+    cap_add:
+      - SYS_PTRACE
+    working_dir: "/quiz-api-service"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: secret
+      MYSQL_DB: quiz
+    command: /quiz-api-service --headless --listen=:40000 --api-version=2 exec /quiz-api-service
+    networks:
+      quiz-network:
+#    depends_on:
+#      - db
+
+  db:
+    container_name: mysql-v8
+    image: mysql:8.0.26
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - '3307:3306'
+    expose:
+      - '3306'
+    volumes:
+      - quiz-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: quiz
+      MYSQL_USER: quiz
+      MYSQL_PASSWORD: quizsecret
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    networks:
+      quiz-network:
+
+
+networks:
+  quiz-network:
+
+volumes:
+  quiz-data:
