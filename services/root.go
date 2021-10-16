@@ -99,7 +99,7 @@ var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "ft-quiz",
+	Use:   "multiple-choice-quiz-api-service",
 	Short: "My test for Fast Track",
 	Long: `This is simple quiz where the user is presses ted with a couple questions
 			and they have to select one from three to get the right answer.`,
@@ -723,7 +723,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ft-quiz.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.multiple-choice-quiz-api-service.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -743,9 +743,9 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".ft-quiz" (without extension).
+		// Search config in home directory with name ".multiple-choice-quiz-api-service" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".ft-quiz")
+		viper.SetConfigName(".multiple-choice-quiz-api-service")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

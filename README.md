@@ -1,7 +1,5 @@
-# ft-quiz
+# Quiz-API-Server
 A simple cli quiz game that posts to rest API
-
-**This was initially written with go version 1.15.2 at the time.**
 
 ---
 
@@ -41,7 +39,7 @@ The game itself consists of only 5 questions and the user must answer them all i
 Once this has been placed in your `$GOROOT` dir simply run 
 
 ```
-go install ft-quiz
+go install quiz-api-service
 ```
 
 Which will create the binary on your machine, at which point you can follow the Run application section below.
@@ -53,13 +51,13 @@ Which will create the binary on your machine, at which point you can follow the 
 Run the application with:
 
 ```
-ft-quiz
+quiz-api-service
 ```
 
 or for a custom port:
 
 ```
-ft-quiz 9991
+quiz-api-service 9991
 ``` 
 
 The latter might be in case, for some reason, the default port `(9990)` is unavailable at the time of launch.
