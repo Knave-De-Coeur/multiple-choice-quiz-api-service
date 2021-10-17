@@ -24,67 +24,17 @@ import (
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
+
+	"quiz-api-service/internal/api"
+	"quiz-api-service/internal/config"
+	"quiz-api-service/internal/pkg"
 )
 
-// Host is the hostname that we'll eb performing rest requests to.
-const Host = "http://localhost"
-
-// DefaultPort is the fallback port when it is not entered as arg
-const DefaultPort = "9990"
-
-// User is generic user that launches and signs up
-type User struct {
-	ID               int    `json:"Id"`
-	Name             string `json:"Name"`
-	Age              int8   `json:"Age"`
-	Username         string `json:"Username"`
-	Password         string `json:"Password"`
-	SubmittedAnswers []rune `json:"SubmittedAnswers"`
-	Score            int    `json:"Score"`
-}
-
-// LoginRequest is the parsed struct of the /login endpoint
-type LoginRequest struct {
-	Username string `json:"Username"`
-	Password string `json:"Password"`
-}
-
-// LogoutRequest is the parsed struct of the /logout endpoint
-type LogoutRequest struct {
-	UserID int
-}
-
-// Response is what is returned from the endpoints should an error occur
-type Response struct {
-	Message string `json:"Message"`
-	Error   bool   `json:"Password"`
-}
-
-// Question presented and evaluated
-type Question struct {
-	ID              int8
-	Description     string // the literal question to be displayed
-	CorrectAnswer   rune
-	AnswerSelection map[rune]string // up to 5 possible answers
-}
-
-// SubmitAnswersRequest is the struct used to decode and encode when using the /submit-answers endpoint
-type SubmitAnswersRequest struct {
-	UserID           int    `json:"UserID"`
-	SubmittedAnswers []rune `json:"SubmittedAnswers"`
-}
-
-// CompareUsersRequest is the struct we parse and send over to the /compare-your-score endpoint
-type CompareUsersRequest struct {
-	UserID    int `json:"UserID"`
-	UserScore int `json:"UserScore"`
-}
-
 // ListOfQuestions will hold a list of Question structs to be displayed and evaluated
-var ListOfQuestions []Question
+var ListOfQuestions []pkg.Question
 
 // ListOfUsers all the players that have registered to the quiz
-var ListOfUsers []User
+var ListOfUsers []pkg.User
 
 // CurrentUserID The logged-in user id interacting with the application
 var CurrentUserID int
@@ -106,7 +56,7 @@ var rootCmd = &cobra.Command{
 	Args: func(cmd *cobra.Command, args []string) error {
 		Port = ""
 		if len(args) < 1 {
-			Port = DefaultPort
+			Port = config.DefaultPort
 		} else {
 			Port = args[0]
 		}
@@ -208,7 +158,7 @@ func runGame() {
 
 // This populates the ListOfQuestions with dummy data
 func generateQuestions() {
-	ListOfQuestions = []Question{
+	ListOfQuestions = []pkg.Question{
 		{
 			ID:            1,
 			Description:   "What is the result of 240 / 12?",
@@ -264,7 +214,7 @@ func generateQuestions() {
 
 // This simply populates the ListOfUsers with dummy data
 func generateDummyUsers() {
-	ListOfUsers = []User{
+	ListOfUsers = []pkg.User{
 		{
 			ID:       1,
 			Name:     "David Smith",
@@ -342,9 +292,9 @@ func play(reader *bufio.Reader) bool {
 		fmt.Println("Evaluating answers...")
 		time.Sleep(2 * time.Second) // for dramatic suspense
 
-		submitAnswerRequest := SubmitAnswersRequest{
-			currentUser.ID,
-			listOfSubmittedRunes,
+		submitAnswerRequest := api.SubmitAnswersRequest{
+			UserID:           currentUser.ID,
+			SubmittedAnswers: listOfSubmittedRunes,
 		}
 
 		postToEndpoint(submitAnswerRequest, "submit-answer")
@@ -357,7 +307,7 @@ func play(reader *bufio.Reader) bool {
 // Console input and logic to set user to post to endpoint
 func createUser(reader *bufio.Reader) bool {
 	uid := len(ListOfUsers) + 1
-	newUser := User{
+	newUser := pkg.User{
 		ID: uid,
 	}
 
@@ -399,9 +349,9 @@ func loginPrompt(reader *bufio.Reader) bool {
 	fmt.Println("Please enter Password:")
 	inputtedPassword, _ := reader.ReadString('\n')
 
-	loginRequest := LoginRequest{
-		inputtedUsername,
-		inputtedPassword,
+	loginRequest := api.LoginRequest{
+		Username: inputtedUsername,
+		Password: inputtedPassword,
 	}
 
 	return postToEndpoint(loginRequest, "login")
@@ -409,7 +359,7 @@ func loginPrompt(reader *bufio.Reader) bool {
 
 // Console function to post to log-out endpoint by taking the CurrentUserID
 func logoutPrompt() bool {
-	logoutRequest := LogoutRequest{
+	logoutRequest := api.LogoutRequest{
 		UserID: CurrentUserID,
 	}
 
@@ -420,7 +370,7 @@ func logoutPrompt() bool {
 func compare() bool {
 	currentUser := searchUsersByID(CurrentUserID)
 
-	requestData := CompareUsersRequest{
+	requestData := api.CompareUsersRequest{
 		UserID:    currentUser.ID,
 		UserScore: currentUser.Score,
 	}
@@ -437,7 +387,7 @@ func postToEndpoint(data interface{}, endpoint string) bool {
 
 	defer res.Body.Close()
 
-	var responseMessage Response
+	var responseMessage api.Response
 
 	_ = json.NewDecoder(res.Body).Decode(&responseMessage)
 
@@ -457,7 +407,7 @@ func homePage(res http.ResponseWriter, _ *http.Request) {
 func login(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
-	var loginReq LoginRequest
+	var loginReq api.LoginRequest
 	_ = json.Unmarshal(reqBody, &loginReq)
 
 	currentUser := searchUsersForUsername(loginReq.Username)
@@ -474,9 +424,9 @@ func login(res http.ResponseWriter, req *http.Request) {
 		message = "Successfully logged in with user: " + currentUser.Username
 	}
 
-	messageResponse := Response{
-		message,
-		foundError,
+	messageResponse := api.Response{
+		Message: message,
+		Error:   foundError,
 	}
 
 	_ = json.NewEncoder(res).Encode(messageResponse)
@@ -487,7 +437,7 @@ func login(res http.ResponseWriter, req *http.Request) {
 func logout(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
-	var logoutRequest LogoutRequest
+	var logoutRequest api.LogoutRequest
 	_ = json.Unmarshal(reqBody, &logoutRequest)
 
 	message := ""
@@ -500,9 +450,9 @@ func logout(res http.ResponseWriter, req *http.Request) {
 
 	CurrentUserID = 0
 
-	resMessage := Response{
-		message,
-		foundError,
+	resMessage := api.Response{
+		Message: message,
+		Error:   foundError,
 	}
 
 	_ = json.NewEncoder(res).Encode(resMessage)
@@ -511,7 +461,7 @@ func logout(res http.ResponseWriter, req *http.Request) {
 // Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
 func addNewUser(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
-	var newPlayer User
+	var newPlayer pkg.User
 	_ = json.Unmarshal(reqBody, &newPlayer)
 
 	message := ""
@@ -533,9 +483,9 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 		message = "User by username: " + newPlayer.Username + " has been successfully added!"
 	}
 
-	responseMessage := Response{
-		message,
-		errorFound,
+	responseMessage := api.Response{
+		Message: message,
+		Error:   errorFound,
 	}
 
 	_ = json.NewEncoder(res).Encode(responseMessage)
@@ -551,7 +501,7 @@ func showPlayers(res http.ResponseWriter, _ *http.Request) {
 func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
 
-	var submitAnswerRequest SubmitAnswersRequest
+	var submitAnswerRequest api.SubmitAnswersRequest
 	_ = json.Unmarshal(reqBody, &submitAnswerRequest)
 
 	currentUser := searchUsersByID(submitAnswerRequest.UserID)
@@ -568,16 +518,15 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
 
-	responseMessage := Response{
-		message,
-		false,
+	responseMessage := api.Response{
+		Message: message,
 	}
 
 	_ = json.NewEncoder(res).Encode(responseMessage)
 }
 
 // This updates the user answers in memory
-func updateUser(user User) {
+func updateUser(user pkg.User) {
 	for i, u := range ListOfUsers {
 		if u.ID == user.ID {
 			ListOfUsers[i] = user
@@ -588,7 +537,7 @@ func updateUser(user User) {
 // Compare stats endpoint func that returns the message with how the user did compare to others
 func compareUserScores(res http.ResponseWriter, req *http.Request) {
 	reqBody, _ := ioutil.ReadAll(req.Body)
-	var compareUsersRequest CompareUsersRequest
+	var compareUsersRequest api.CompareUsersRequest
 	_ = json.Unmarshal(reqBody, &compareUsersRequest)
 
 	user := searchUsersByID(compareUsersRequest.UserID)
@@ -612,9 +561,9 @@ func compareUserScores(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	responseMessage := Response{
-		message,
-		errorFound,
+	responseMessage := api.Response{
+		Message: message,
+		Error:   errorFound,
 	}
 
 	_ = json.NewEncoder(res).Encode(responseMessage)
@@ -644,7 +593,7 @@ func checkAndAssignPort(port string) {
 	_ = ln.Close()
 
 	Port = port
-	FullHostname = Host + ":" + Port + "/"
+	FullHostname = config.Host + ":" + Port + "/"
 }
 
 // Simply checks if error exists and panics accordingly
@@ -655,8 +604,8 @@ func check(e error) {
 }
 
 // Goes through lists of users and returns the user with the correct username or nothing
-func searchUsersForUsername(userName string) User {
-	user := User{}
+func searchUsersForUsername(userName string) pkg.User {
+	user := pkg.User{}
 
 	for _, userFromList := range ListOfUsers {
 		if userFromList.Username == strings.TrimSpace(userName) {
@@ -669,8 +618,8 @@ func searchUsersForUsername(userName string) User {
 }
 
 // Goes through list of users and returns user with correct ID or nothing
-func searchUsersByID(ID int) User {
-	user := User{}
+func searchUsersByID(ID int) pkg.User {
+	user := pkg.User{}
 
 	for _, userFromList := range ListOfUsers {
 		if userFromList.ID == ID {
@@ -683,7 +632,7 @@ func searchUsersByID(ID int) User {
 }
 
 // This calculates the comparison percentage the user has from other users
-func getUserComparisonScore(currentUser User) float64 {
+func getUserComparisonScore(currentUser pkg.User) float64 {
 
 	var listOfScores []int
 

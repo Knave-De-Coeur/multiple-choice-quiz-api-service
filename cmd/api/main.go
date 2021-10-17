@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"quiz-api-service/services"
+	"quiz-api-service/internal/services"
 )
 
 func main() {
