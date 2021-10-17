@@ -16,9 +16,16 @@ limitations under the License.
 package main
 
 import (
+	"os"
+
+	"quiz-api-service/internal/config"
 	"quiz-api-service/internal/services"
 )
 
 func main() {
+
+	config.Host = os.Getenv("HOST")
+	config.DefaultPort = os.Getenv("PORT")
+
 	services.Execute()
 }
