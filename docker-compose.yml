@@ -2,27 +2,22 @@ version: "3.8"
 
 services:
   app:
-    image: golang:1.17
+    image: golang:1.17.5-alpine3.15
     container_name: quiz-api-service
     build: ./
     ports:
       - "8000:8000"
       - "40000:40000"
-    security_opt:
-      - "seccomp:unconfined"
-    cap_add:
-      - SYS_PTRACE
-    working_dir: "/quiz-api-service"
+    working_dir: "/multiple-choice-quiz-api-service"
     environment:
       MYSQL_HOST: mysql
       MYSQL_USER: root
       MYSQL_PASSWORD: secret
       MYSQL_DB: quiz
-    command: /quiz-api-service --headless --listen=:40000 --api-version=2 exec /quiz-api-service
     networks:
       quiz-network:
-#    depends_on:
-#      - db
+    depends_on:
+      - db
 
   db:
     container_name: mysql-v8

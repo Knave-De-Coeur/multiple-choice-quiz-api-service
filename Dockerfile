@@ -1,17 +1,21 @@
-# Compile stage
-FROM golang:1.17 AS build-env
+# syntax=docker/dockerfile:1
 
-ADD . /dockerdev
-WORKDIR /dockerdev
+##
+## Build
+##
+FROM golang:1.17.5-alpine3.15 AS build-env
 
-RUN go build -o /quiz-api-service/cmd/api/main.go
+COPY ./ /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/
 
-# Final stage
-FROM debian:buster
+WORKDIR /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/
 
-EXPOSE 8000
+# Download necessary Go modules
+RUN go mod download
 
-WORKDIR /
-COPY --from=build-env /quiz-api-service /
+ENV GO111MODULE=on
 
-CMD ["/quiz-api-service"]
+RUN go build -o /go/bin/ /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/cmd/api
+
+EXPOSE 9990
+
+CMD ["./go/bin/api"]
