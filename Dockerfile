@@ -18,4 +18,4 @@ RUN go build -o /go/bin/ /go/src/github.com/knave-de-coeur/multiple-choice-quize
 
 EXPOSE 9990
 
-CMD ["./go/bin/api"]
+ENTRYPOINT ["/go/bin/api"]
