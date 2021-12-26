@@ -1,47 +1,62 @@
 package config
 
 import (
-	"fmt"
-	"os"
+	"log"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
-var (
-	Host               = "localhost"
-	DefaultPort        = "9990"
-	DBConnectionString = "root:secret@tcp(127.0.0.1:3306)/quiz?charset=utf8mb4&parseTime=True&loc=Local"
-	MaxConnections     = 100
-	MaxIdleConnections = 10
-	MaxLifeTime        = 1
-	LogLevel           = "debug"
-)
+func fallbackConfigs() {
+	viper.SetDefault("DB_CONNECTION", "quiz:quizsecret@tcp(localhost:3306)/quiz?charset=utf8mb4&parseTime=True&loc=Local")
+	viper.SetDefault("HOST", "localhost")
+	viper.SetDefault("DEFAULT_PORT", 8080)
+	viper.SetDefault("MAX_CONNECTIONS", 100)
+	viper.SetDefault("MAX_IDLE_CONNECTIONS", 10)
+	viper.SetDefault("MAX_LIFETIME", 1)
+}
 
-var CfgFile string
+// Configurations app configs from env file, env params or fallback configs
+type Configurations struct {
+	DBConnection       string `mapstructure:"DB_CONNECTION"`
+	Host               string `mapstructure:"HOST"`
+	DefaultPort        string `mapstructure:"DEFAULT_PORT"`
+	MaxConnections     int    `mapstructure:"MAX_CONNECTIONS"`
+	MaxIdleConnections int    `mapstructure:"MAX_IDLE_CONNECTIONS"`
+	MaxLifetime        int    `mapstructure:"MAX_LIFETIME"`
+}
+
+var CurrentConfigs Configurations
 
 // initConfig reads in config file and ENV variables if set.
 func init() {
-	if CfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(CfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+
+	var err error
+
+	CurrentConfigs, err = LoadConfig("./")
+	if err != nil {
+		log.Fatalf("something went wrong setting up configs: %+v", err)
+	}
+}
+
+// LoadConfig reads configuration from file or environment variables.
+func LoadConfig(path string) (config Configurations, err error) {
+	viper.AddConfigPath(path)
+	viper.SetConfigName("app")
+	viper.SetConfigType("env")
+
+	viper.AutomaticEnv()
+
+	if err = viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found; ignore error if desired
+			fallbackConfigs()
+		} else {
+			// Config file was found but another error was produced
+			return
 		}
-
-		// Search config in home directory with name ".quiz-api-service" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".quiz-api-service")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	err = viper.Unmarshal(&config)
 
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
+	return
 }

@@ -19,18 +19,12 @@ import (
 	"log"
 	"os"
 
-	"go.uber.org/zap"
-
 	"quiz-api-service/internal/config"
 	"quiz-api-service/internal/services"
 	"quiz-api-service/internal/utils"
 )
 
 func main() {
-
-	config.Host = os.Getenv("HOST")
-	config.DefaultPort = os.Getenv("PORT")
-	config.DBConnectionString = os.Getenv("DB_CONNECTION")
 
 	logger, err := utils.SetUpLogger()
 	if err != nil {
@@ -39,11 +33,14 @@ func main() {
 
 	defer logger.Sync()
 
-	_, err = utils.SetUpDBConnection(config.DBConnectionString, logger)
+	logger.Info("🚀 connecting to db")
+
+	_, err = utils.SetUpDBConnection(config.CurrentConfigs.DBConnection, logger)
 	if err != nil {
-		logger.Error("error encountered setting up db conn:", zap.Error(err))
 		os.Exit(1)
 	}
+
+	logger.Info("✅ Setup connection to db.")
 
 	services.Execute()
 }
