@@ -16,16 +16,34 @@ limitations under the License.
 package main
 
 import (
+	"log"
 	"os"
+
+	"go.uber.org/zap"
 
 	"quiz-api-service/internal/config"
 	"quiz-api-service/internal/services"
+	"quiz-api-service/internal/utils"
 )
 
 func main() {
 
 	config.Host = os.Getenv("HOST")
 	config.DefaultPort = os.Getenv("PORT")
+	config.DBConnectionString = os.Getenv("DB_CONNECTION")
+
+	logger, err := utils.SetUpLogger()
+	if err != nil {
+		log.Fatalf("somethign went wrong setting up logger for api: %+v", err)
+	}
+
+	defer logger.Sync()
+
+	_, err = utils.SetUpDBConnection(config.DBConnectionString, logger)
+	if err != nil {
+		logger.Error("error encountered setting up db conn:", zap.Error(err))
+		os.Exit(1)
+	}
 
 	services.Execute()
 }

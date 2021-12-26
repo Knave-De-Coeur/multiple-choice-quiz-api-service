@@ -9,8 +9,13 @@ import (
 )
 
 var (
-	Host        = "http://localhost"
-	DefaultPort = "9990"
+	Host               = "localhost"
+	DefaultPort        = "9990"
+	DBConnectionString = "root:secret@tcp(127.0.0.1:3306)/quiz?charset=utf8mb4&parseTime=True&loc=Local"
+	MaxConnections     = 100
+	MaxIdleConnections = 10
+	MaxLifeTime        = 1
+	LogLevel           = "debug"
 )
 
 var CfgFile string
