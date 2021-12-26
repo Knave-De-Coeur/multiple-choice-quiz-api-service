@@ -48,10 +48,8 @@ func LoadConfig(path string) (config Configurations, err error) {
 
 	if err = viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found; ignore error if desired
 			fallbackConfigs()
 		} else {
-			// Config file was found but another error was produced
 			return
 		}
 	}

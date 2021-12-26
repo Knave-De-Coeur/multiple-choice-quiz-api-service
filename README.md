@@ -36,31 +36,30 @@ The game itself consists of only 5 questions and the user must answer them all i
 
 ### Set up 
 
-Once this has been placed in your `$GOROOT` dir simply run 
+To build project, start api and run migrations : 
 
+``` 
+cd multiple-choice-quiz-api-service
+
+docker-compose up
 ```
-go install quiz-api-service
-```
-
-Which will create the binary on your machine, at which point you can follow the Run application section below.
-
 ---
 
 ### Running application
 
-Run the application with:
+Build console:
 
 ```
-quiz-api-service
+go build console
 ```
 
-or for a custom port:
+Then to simply run a new interface to play the game:
 
 ```
-quiz-api-service 9991
-``` 
+cd dir-to-binary/
 
-The latter might be in case, for some reason, the default port `(9990)` is unavailable at the time of launch.
+console
+```
 
 ### Gameplay
 
@@ -81,14 +80,15 @@ The latter might be in case, for some reason, the default port `(9990)` is unava
 
 ## Technical Description
 
-The project was built from the ground up using the [Cobra Generator](https://github.com/spf13/cobra/blob/master/cobra/README.md) to create the boilerplate for the cli. Standards for the cobra application were abided by where the `Main.go` file simply initialzies the cobra command and the command file it's has the logic for it's purpose, in this case running the server and game.
+Docker was used to create the mysql database and build an image of the api inside another container
 
-### Assumptions and considerations 
+Viper was used to manage configurations including fallbacks.
 
-- I did not add anything special in relation to cobra's feature as i felt it was beyond the scope, simply used is as a boilerplate for the cli aspect of this app.
-- Memory allocation was taken into account when setting up local and global variables, as well as scalability and maintainability.
-- Error handling was implemented where appropriate as well as some custom validation for the requests, however not alot went into this as it might have gone beyond the scope of this task.
-- No encryption was implemented on purpose since it was out of scope.
-- An idea was to read the questions from an online csv, but as that might go a little far out of the cope of this task, I decide to simply hard code them 
-- While there is a `Sign up` option in the main menu of the game, 3 users were added so that one could log in straight away with one of them and they all have their individual scores that are evalutaed on the `compare` option 
-- Comments were added for all funcs and structs, structure was based on examples I saw on go projects
+Whilst the api sets up the endpoints to communicate with the database it also creates the schema and handles migrations.
+
+The cli is a simple interface that performs REST API requests to grab data. This is a minimalistic interface built from the ground up using the
+[Cobra Generator]
+(https://github.
+com/spf13/cobra/blob/master/cobra/README.md)
+to create the boilerplate for the cli.
+

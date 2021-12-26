@@ -27,6 +27,8 @@ import (
 	"quiz-api-service/internal/pkg"
 )
 
+// TODO: create services, api and cli_interface
+
 // ListOfQuestions will hold a list of Question structs to be displayed and evaluated
 var ListOfQuestions []pkg.Question
 
@@ -150,6 +152,8 @@ func runGame() {
 		}
 	}
 }
+
+// TODO: refactor following to sql migrations
 
 // This populates the ListOfQuestions with dummy data
 func generateQuestions() {
