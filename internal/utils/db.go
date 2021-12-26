@@ -11,6 +11,8 @@ import (
 	"quiz-api-service/internal/config"
 )
 
+// TODO: add a string generator and split the connection string into host, db, user and pass - figure out how api container should connect to db container
+
 // GetDBConnection uses string passed to connect to mysql database
 func GetDBConnection(conn string, logger *zap.Logger) (*gorm.DB, error) {
 
