@@ -7,7 +7,10 @@ import (
 )
 
 func fallbackConfigs() {
-	viper.SetDefault("DB_CONNECTION", "quiz:quizsecret@tcp(localhost:3306)/quiz?charset=utf8mb4&parseTime=True&loc=Local")
+	viper.SetDefault("DB_CONNECTION_FORMAT", "%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&parseTime=True&loc=Local")
+	viper.SetDefault("DB_NAME", "quiz")
+	viper.SetDefault("DB_USER", "quiz")
+	viper.SetDefault("DB_PASSWORD", "quizsecret")
 	viper.SetDefault("HOST", "localhost")
 	viper.SetDefault("DEFAULT_PORT", 8080)
 	viper.SetDefault("MAX_CONNECTIONS", 100)
@@ -17,7 +20,10 @@ func fallbackConfigs() {
 
 // Configurations app configs from env file, env params or fallback configs
 type Configurations struct {
-	DBConnection       string `mapstructure:"DB_CONNECTION"`
+	DBConnectionFormat string `mapstructure:"DB_CONNECTION_FORMAT"`
+	DBName             string `mapstructure:"DB_NAME"`
+	DBUser             string `mapstructure:"DB_USER"`
+	DBPassword         string `mapstructure:"DB_PASSWORD"`
 	Host               string `mapstructure:"HOST"`
 	DefaultPort        string `mapstructure:"DEFAULT_PORT"`
 	MaxConnections     int    `mapstructure:"MAX_CONNECTIONS"`

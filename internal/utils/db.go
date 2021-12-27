@@ -11,12 +11,17 @@ import (
 	"quiz-api-service/internal/config"
 )
 
-// TODO: add a string generator and split the connection string into host, db, user and pass - figure out how api container should connect to db container
+// GetDBConnectionString uses configs to generate a connection string to the db
+func GetDBConnectionString(user, pass, host, dbName string) string {
+	return fmt.Sprintf(config.CurrentConfigs.DBConnectionFormat, user, pass, host, dbName)
+}
 
 // GetDBConnection uses string passed to connect to mysql database
-func GetDBConnection(conn string, logger *zap.Logger) (*gorm.DB, error) {
+func GetDBConnection(user, pass, host, dbName string, logger *zap.Logger) (*gorm.DB, error) {
 
-	db, err := gorm.Open(mysql.Open(conn), &gorm.Config{})
+	dsn := GetDBConnectionString(user, pass, host, dbName)
+
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		logger.Error("❌ something went wrong getting the db connection", zap.String("method", "GetDBConnection"), zap.Error(err))
 		return nil, err
@@ -26,9 +31,9 @@ func GetDBConnection(conn string, logger *zap.Logger) (*gorm.DB, error) {
 }
 
 // SetUpDBConnection gets the connection and applies all the configs to it
-func SetUpDBConnection(conn string, logger *zap.Logger) (*gorm.DB, error) {
+func SetUpDBConnection(user, pass, host, dbName string, logger *zap.Logger) (*gorm.DB, error) {
 
-	db, err := GetDBConnection(conn, logger)
+	db, err := GetDBConnection(user, pass, host, dbName, logger)
 	if err != nil {
 		return nil, err
 	}

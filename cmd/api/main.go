@@ -35,7 +35,13 @@ func main() {
 
 	logger.Info("🚀 connecting to db")
 
-	_, err = utils.SetUpDBConnection(config.CurrentConfigs.DBConnection, logger)
+	_, err = utils.SetUpDBConnection(
+		config.CurrentConfigs.DBUser,
+		config.CurrentConfigs.DBPassword,
+		config.CurrentConfigs.Host,
+		config.CurrentConfigs.DBName,
+		logger,
+	)
 	if err != nil {
 		os.Exit(1)
 	}
