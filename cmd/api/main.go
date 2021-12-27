@@ -16,10 +16,13 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"log"
-	"os"
+
+	"go.uber.org/zap"
 
 	"quiz-api-service/internal/config"
+	"quiz-api-service/internal/pkg"
 	"quiz-api-service/internal/services"
 	"quiz-api-service/internal/utils"
 )
@@ -35,7 +38,7 @@ func main() {
 
 	logger.Info("🚀 connecting to db")
 
-	_, err = utils.SetUpDBConnection(
+	quizDBConn, err := utils.SetUpDBConnection(
 		config.CurrentConfigs.DBUser,
 		config.CurrentConfigs.DBPassword,
 		config.CurrentConfigs.Host,
@@ -43,10 +46,19 @@ func main() {
 		logger,
 	)
 	if err != nil {
-		os.Exit(1)
+		logger.Fatal("exiting application...", zap.Error(err))
 	}
 
-	logger.Info("✅ Setup connection to db.")
+	logger.Info(fmt.Sprintf("✅ Setup connection to %s db.", quizDBConn.Migrator().CurrentDatabase()))
+
+	logger.Info("🚀 Setting up migrations")
+
+	err = quizDBConn.Migrator().AutoMigrate(&pkg.User{}, &pkg.Game{})
+	if err != nil {
+		logger.Fatal("something went wrong migrating schema", zap.Error(err))
+	}
+
+	_ = services.NewQuizService(quizDBConn)
 
 	services.Execute()
 }

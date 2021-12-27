@@ -6,13 +6,11 @@ services:
     image: golang:1.17.5-alpine3.15
     build: ./
     ports:
-      - "8000:8000"
-      - "40000:40000"
-    working_dir: "/multiple-choice-quiz-api-service"
+      - "8080:8080"
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_USER: root
-      MYSQL_PASSWORD: secret
+      MYSQL_HOST: db
+      MYSQL_USER: quiz
+      MYSQL_PASSWORD: quizsecret
       MYSQL_DB: quiz
     networks:
       quiz-network:

@@ -7,18 +7,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"os"
-	"sort"
-	"strconv"
+	"os/user"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/spf13/cobra"
 
@@ -36,13 +34,30 @@ var ListOfQuestions []pkg.Question
 var ListOfUsers []pkg.User
 
 // CurrentUserID The logged-in user id interacting with the application
-var CurrentUserID int
+var CurrentUserID uint
 
 // Port is the port number the server will run on, defined as an arg in the app launch
 var Port string
 
 // FullHostname is the host and port concatenated
 var FullHostname string
+
+type QuizService struct {
+	DBConn *gorm.DB
+}
+
+type QuizServices interface {
+	CreateUser(user user.User) error
+	GetQuestions() error
+	GetScore() error
+	CompareScores() error
+}
+
+func NewQuizService(dbConn *gorm.DB) *QuizService {
+	return &QuizService{
+		DBConn: dbConn,
+	}
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -53,7 +68,7 @@ var rootCmd = &cobra.Command{
 	Args: func(cmd *cobra.Command, args []string) error {
 		Port = ""
 		if len(args) < 1 {
-			Port = config.CurrentConfigs.DefaultPort
+			Port = config.CurrentConfigs.Port
 		} else {
 			Port = args[0]
 		}
@@ -64,9 +79,9 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		// sets the questions up
-		generateQuestions()
-		// sets users
-		generateDummyUsers()
+		// generateQuestions()
+		// // sets users
+		// generateDummyUsers()
 
 		wg := new(sync.WaitGroup)
 
@@ -76,7 +91,7 @@ var rootCmd = &cobra.Command{
 		go handleRequests()
 
 		// runs game
-		go runGame()
+		// go runGame()
 
 		wg.Wait()
 	},
@@ -89,256 +104,257 @@ func handleRequests() {
 	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
 	myRouter.HandleFunc("/login", login).Methods("POST")
 	myRouter.HandleFunc("/logout", logout).Methods("POST")
-	myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
-	myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
+	// myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
+	// myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
 	myRouter.HandleFunc("/players", showPlayers)
 	log.Fatal(http.ListenAndServe(":"+Port, myRouter))
 }
 
-// This is one of the main goroutines of the application that runs the user interface part
-func runGame() {
-	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
-
-	reader := bufio.NewReader(os.Stdin)
-	key, _ := reader.ReadString('\n')
-
-	if len(key) > 0 {
-		for {
-			fmt.Println("Enter option letter and press enter")
-
-			if CurrentUserID == 0 {
-				fmt.Println("a: Sign Up")
-				fmt.Println("b: Login")
-				fmt.Println("c: Exit")
-
-				optionStr, _ := reader.ReadString('\n')
-
-				option := []rune(optionStr)
-
-				switch option[0] {
-				case 'a':
-					createUser(reader)
-				case 'b':
-					loginPrompt(reader)
-				case 'c':
-					os.Exit(0)
-				default:
-					fmt.Println("Invalid try again")
-				}
-			} else {
-				fmt.Println("a: Play")
-				fmt.Println("b: Logout")
-				fmt.Println("c: Compare")
-				fmt.Println("d: Exit")
-
-				optionStr, _ := reader.ReadString('\n')
-
-				option := []rune(optionStr)
-
-				switch option[0] {
-				case 'a':
-					play(reader)
-				case 'b':
-					logoutPrompt()
-				case 'c':
-					compare()
-				case 'd':
-					os.Exit(0)
-				default:
-					fmt.Println("Invalid try again")
-				}
-			}
-
-		}
-	}
-}
+//
+// // This is one of the main goroutines of the application that runs the user interface part
+// func runGame() {
+// 	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
+//
+// 	reader := bufio.NewReader(os.Stdin)
+// 	key, _ := reader.ReadString('\n')
+//
+// 	if len(key) > 0 {
+// 		for {
+// 			fmt.Println("Enter option letter and press enter")
+//
+// 			if CurrentUserID == 0 {
+// 				fmt.Println("a: Sign Up")
+// 				fmt.Println("b: Login")
+// 				fmt.Println("c: Exit")
+//
+// 				optionStr, _ := reader.ReadString('\n')
+//
+// 				option := []rune(optionStr)
+//
+// 				switch option[0] {
+// 				case 'a':
+// 					createUser(reader)
+// 				case 'b':
+// 					loginPrompt(reader)
+// 				case 'c':
+// 					os.Exit(0)
+// 				default:
+// 					fmt.Println("Invalid try again")
+// 				}
+// 			} else {
+// 				fmt.Println("a: Play")
+// 				fmt.Println("b: Logout")
+// 				fmt.Println("c: Compare")
+// 				fmt.Println("d: Exit")
+//
+// 				optionStr, _ := reader.ReadString('\n')
+//
+// 				option := []rune(optionStr)
+//
+// 				switch option[0] {
+// 				case 'a':
+// 					play(reader)
+// 				case 'b':
+// 					logoutPrompt()
+// 				case 'c':
+// 					compare()
+// 				case 'd':
+// 					os.Exit(0)
+// 				default:
+// 					fmt.Println("Invalid try again")
+// 				}
+// 			}
+//
+// 		}
+// 	}
+// }
 
 // TODO: refactor following to sql migrations
 
-// This populates the ListOfQuestions with dummy data
-func generateQuestions() {
-	ListOfQuestions = []pkg.Question{
-		{
-			ID:            1,
-			Description:   "What is the result of 240 / 12?",
-			CorrectAnswer: 'b',
-			AnswerSelection: map[rune]string{
-				'a': "100",
-				'b': "20",
-				'c': "24",
-			},
-		},
-		{
-			ID:            2,
-			Description:   "Who was the first man on the moon?",
-			CorrectAnswer: 'c',
-			AnswerSelection: map[rune]string{
-				'a': "Buzz Aldren",
-				'b': "Buzz Lightyear",
-				'c': "Neil Armstrong",
-			},
-		},
-		{
-			ID:            3,
-			Description:   "Who wrote the hit single, Yellow Submarine?",
-			CorrectAnswer: 'c',
-			AnswerSelection: map[rune]string{
-				'a': "Elvis Presley",
-				'b': "The Rolling Stones",
-				'c': "The Beatles",
-			},
-		},
-		{
-			ID:            4,
-			Description:   "In what year did Malta gain it's independence?",
-			CorrectAnswer: 'c',
-			AnswerSelection: map[rune]string{
-				'a': "1889",
-				'b': "2004",
-				'c': "1964",
-			},
-		},
-		{
-			ID:            5,
-			Description:   "When was Go launched?",
-			CorrectAnswer: 'a',
-			AnswerSelection: map[rune]string{
-				'a': "2009",
-				'b': "2019",
-				'c': "1999",
-			},
-		},
-	}
-}
-
-// This simply populates the ListOfUsers with dummy data
-func generateDummyUsers() {
-	ListOfUsers = []pkg.User{
-		{
-			ID:       1,
-			Name:     "David Smith",
-			Age:      54,
-			Username: "david54",
-			Password: "pass765",
-			SubmittedAnswers: []rune{
-				'a', 'c', 'b', 'b', 'c',
-			},
-			Score: 2,
-		},
-		{
-			ID:       2,
-			Name:     "John Doe",
-			Age:      14,
-			Username: "johndoe14",
-			Password: "pass14",
-			SubmittedAnswers: []rune{
-				'a', 'a', 'b', 'c', 'c',
-			},
-			Score: 3,
-		},
-		{
-			ID:       3,
-			Name:     "Steve Bord",
-			Age:      28,
-			Username: "seteveb321",
-			Password: "qwerty098",
-			SubmittedAnswers: []rune{
-				'c', 'b', 'c', 'c', 'c',
-			},
-			Score: 2,
-		},
-	}
-}
+// // This populates the ListOfQuestions with dummy data
+// func generateQuestions() {
+// 	ListOfQuestions = []pkg.Question{
+// 		{
+// 			ID:            1,
+// 			Description:   "What is the result of 240 / 12?",
+// 			CorrectAnswer: 'b',
+// 			AnswerSelection: map[rune]string{
+// 				'a': "100",
+// 				'b': "20",
+// 				'c': "24",
+// 			},
+// 		},
+// 		{
+// 			ID:            2,
+// 			Description:   "Who was the first man on the moon?",
+// 			CorrectAnswer: 'c',
+// 			AnswerSelection: map[rune]string{
+// 				'a': "Buzz Aldren",
+// 				'b': "Buzz Lightyear",
+// 				'c': "Neil Armstrong",
+// 			},
+// 		},
+// 		{
+// 			ID:            3,
+// 			Description:   "Who wrote the hit single, Yellow Submarine?",
+// 			CorrectAnswer: 'c',
+// 			AnswerSelection: map[rune]string{
+// 				'a': "Elvis Presley",
+// 				'b': "The Rolling Stones",
+// 				'c': "The Beatles",
+// 			},
+// 		},
+// 		{
+// 			ID:            4,
+// 			Description:   "In what year did Malta gain it's independence?",
+// 			CorrectAnswer: 'c',
+// 			AnswerSelection: map[rune]string{
+// 				'a': "1889",
+// 				'b': "2004",
+// 				'c': "1964",
+// 			},
+// 		},
+// 		{
+// 			ID:            5,
+// 			Description:   "When was Go launched?",
+// 			CorrectAnswer: 'a',
+// 			AnswerSelection: map[rune]string{
+// 				'a': "2009",
+// 				'b': "2019",
+// 				'c': "1999",
+// 			},
+// 		},
+// 	}
+// }
+//
+// // This simply populates the ListOfUsers with dummy data
+// func generateDummyUsers() {
+// 	ListOfUsers = []pkg.User{
+// 		{
+// 			ID:       1,
+// 			Name:     "David Smith",
+// 			Age:      54,
+// 			Username: "david54",
+// 			Password: "pass765",
+// 			SubmittedAnswers: []rune{
+// 				'a', 'c', 'b', 'b', 'c',
+// 			},
+// 			Score: 2,
+// 		},
+// 		{
+// 			ID:       2,
+// 			Name:     "John Doe",
+// 			Age:      14,
+// 			Username: "johndoe14",
+// 			Password: "pass14",
+// 			SubmittedAnswers: []rune{
+// 				'a', 'a', 'b', 'c', 'c',
+// 			},
+// 			Score: 3,
+// 		},
+// 		{
+// 			ID:       3,
+// 			Name:     "Steve Bord",
+// 			Age:      28,
+// 			Username: "seteveb321",
+// 			Password: "qwerty098",
+// 			SubmittedAnswers: []rune{
+// 				'c', 'b', 'c', 'c', 'c',
+// 			},
+// 			Score: 2,
+// 		},
+// 	}
+// }
 
 // CONSOLE FUNCTIONS
 
 // This is the gameplay section, loops through each question, outputting the questions and possible answers
 // Will wait for user input and go to the next question, once they're all answered it posts to get the result
-func play(reader *bufio.Reader) bool {
-	fmt.Printf("Press any key followed by enter to start the game you have %v questions \n", len(ListOfQuestions))
-
-	currentUser := searchUsersByID(CurrentUserID)
-
-	key, err := reader.ReadString('\n')
-	check(err)
-
-	if len(key) > 0 {
-		var listOfSubmittedRunes []rune
-		for _, q := range ListOfQuestions {
-			fmt.Printf("Question: %d %s", q.ID, q.Description)
-			questionKeyStrings := make([]string, 0, len(q.AnswerSelection))
-			for k := range q.AnswerSelection {
-				questionKeyStrings = append(questionKeyStrings, string(k))
-			}
-			sort.Strings(questionKeyStrings)
-			for {
-				for _, option := range questionKeyStrings {
-					runeKey := []rune(option)
-					fmt.Printf("%v: %v \n", option, q.AnswerSelection[runeKey[0]])
-				}
-				submittedAnswer, err := reader.ReadString('\n')
-				check(err)
-				if !isAnswerValid(questionKeyStrings, strings.TrimSpace(submittedAnswer)) {
-					fmt.Println("Please enter only one of the following options: ")
-					continue
-				}
-				answerRune := []rune(submittedAnswer)[0]
-				fmt.Println("answer submitted: " + string(answerRune))
-				listOfSubmittedRunes = append(listOfSubmittedRunes, answerRune)
-				break
-			}
-		}
-		fmt.Println("Evaluating answers...")
-		time.Sleep(2 * time.Second) // for dramatic suspense
-
-		submitAnswerRequest := api.SubmitAnswersRequest{
-			UserID:           currentUser.ID,
-			SubmittedAnswers: listOfSubmittedRunes,
-		}
-
-		postToEndpoint(submitAnswerRequest, "submit-answer")
-
-	}
-
-	return true
-}
-
-// Console input and logic to set user to post to endpoint
-func createUser(reader *bufio.Reader) bool {
-	uid := len(ListOfUsers) + 1
-	newUser := pkg.User{
-		ID: uid,
-	}
-
-	fmt.Println("Start creating your profile.")
-
-	for {
-		fmt.Println("Enter Full Name: ")
-		newUser.Name, _ = reader.ReadString('\n')
-
-		fmt.Println("Enter your age: ")
-		rawAge, _ := reader.ReadString('\n')
-		rawAge = strings.TrimSpace(rawAge)
-		intAge, _ := strconv.Atoi(rawAge)
-		newUser.Age = int8(intAge)
-
-		fmt.Println("Enter a Username: ")
-		newUser.Username, _ = reader.ReadString('\n')
-		fmt.Println("Enter a password: ")
-		newUser.Password, _ = reader.ReadString('\n')
-
-		newUser.Name = strings.TrimSpace(newUser.Name)
-		newUser.Username = strings.TrimSpace(newUser.Username)
-		newUser.Password = strings.TrimSpace(newUser.Password)
-
-		if postToEndpoint(newUser, "new-player") {
-			break
-		}
-
-	}
-
-	return true
-}
+// func play(reader *bufio.Reader) bool {
+// 	fmt.Printf("Press any key followed by enter to start the game you have %v questions \n", len(ListOfQuestions))
+//
+// 	currentUser := searchUsersByID(CurrentUserID)
+//
+// 	key, err := reader.ReadString('\n')
+// 	check(err)
+//
+// 	if len(key) > 0 {
+// 		var listOfSubmittedRunes []rune
+// 		for _, q := range ListOfQuestions {
+// 			fmt.Printf("Question: %d %s", q.ID, q.Description)
+// 			questionKeyStrings := make([]string, 0, len(q.AnswerSelection))
+// 			for k := range q.AnswerSelection {
+// 				questionKeyStrings = append(questionKeyStrings, string(k))
+// 			}
+// 			sort.Strings(questionKeyStrings)
+// 			for {
+// 				for _, option := range questionKeyStrings {
+// 					runeKey := []rune(option)
+// 					fmt.Printf("%v: %v \n", option, q.AnswerSelection[runeKey[0]])
+// 				}
+// 				submittedAnswer, err := reader.ReadString('\n')
+// 				check(err)
+// 				if !isAnswerValid(questionKeyStrings, strings.TrimSpace(submittedAnswer)) {
+// 					fmt.Println("Please enter only one of the following options: ")
+// 					continue
+// 				}
+// 				answerRune := []rune(submittedAnswer)[0]
+// 				fmt.Println("answer submitted: " + string(answerRune))
+// 				listOfSubmittedRunes = append(listOfSubmittedRunes, answerRune)
+// 				break
+// 			}
+// 		}
+// 		fmt.Println("Evaluating answers...")
+// 		time.Sleep(2 * time.Second) // for dramatic suspense
+//
+// 		submitAnswerRequest := api.SubmitAnswersRequest{
+// 			UserID:           currentUser.ID,
+// 			SubmittedAnswers: listOfSubmittedRunes,
+// 		}
+//
+// 		postToEndpoint(submitAnswerRequest, "submit-answer")
+//
+// 	}
+//
+// 	return true
+// }
+//
+// // Console input and logic to set user to post to endpoint
+// func createUser(reader *bufio.Reader) bool {
+// 	uid := len(ListOfUsers) + 1
+// 	newUser := pkg.User{
+// 		ID: uid,
+// 	}
+//
+// 	fmt.Println("Start creating your profile.")
+//
+// 	for {
+// 		fmt.Println("Enter Full Name: ")
+// 		newUser.Name, _ = reader.ReadString('\n')
+//
+// 		fmt.Println("Enter your age: ")
+// 		rawAge, _ := reader.ReadString('\n')
+// 		rawAge = strings.TrimSpace(rawAge)
+// 		intAge, _ := strconv.Atoi(rawAge)
+// 		newUser.Age = int8(intAge)
+//
+// 		fmt.Println("Enter a Username: ")
+// 		newUser.Username, _ = reader.ReadString('\n')
+// 		fmt.Println("Enter a password: ")
+// 		newUser.Password, _ = reader.ReadString('\n')
+//
+// 		newUser.Name = strings.TrimSpace(newUser.Name)
+// 		newUser.Username = strings.TrimSpace(newUser.Username)
+// 		newUser.Password = strings.TrimSpace(newUser.Password)
+//
+// 		if postToEndpoint(newUser, "new-player") {
+// 			break
+// 		}
+//
+// 	}
+//
+// 	return true
+// }
 
 // This will check the users input and set the CurrentUser
 func loginPrompt(reader *bufio.Reader) bool {
@@ -359,23 +375,23 @@ func loginPrompt(reader *bufio.Reader) bool {
 // Console function to post to log-out endpoint by taking the CurrentUserID
 func logoutPrompt() bool {
 	logoutRequest := api.LogoutRequest{
-		UserID: CurrentUserID,
+		UserID: int(CurrentUserID),
 	}
 
 	return postToEndpoint(logoutRequest, "logout")
 }
 
 // Compare console func that simply posts to the endpoint and displays the message
-func compare() bool {
-	currentUser := searchUsersByID(CurrentUserID)
-
-	requestData := api.CompareUsersRequest{
-		UserID:    currentUser.ID,
-		UserScore: currentUser.Score,
-	}
-
-	return postToEndpoint(requestData, "compare-your-score")
-}
+// func compare() bool {
+// 	currentUser := searchUsersByID(CurrentUserID)
+//
+// 	requestData := api.CompareUsersRequest{
+// 		UserID:    currentUser.ID,
+// 		UserScore: currentUser.Score,
+// 	}
+//
+// 	return postToEndpoint(requestData, "compare-your-score")
+// }
 
 // Grouped logic that posts to endpoint and receives message to be outputted to the console
 func postToEndpoint(data interface{}, endpoint string) bool {
@@ -442,7 +458,7 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	message := ""
 	foundError := false
 
-	if CurrentUserID != logoutRequest.UserID {
+	if CurrentUserID != uint(logoutRequest.UserID) {
 		message = "Id doesn't match id to eb logged out."
 		foundError = true
 	}
@@ -475,8 +491,6 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	newPlayer.SubmittedAnswers = []rune{}
-
 	if !errorFound {
 		ListOfUsers = append(ListOfUsers, newPlayer)
 		message = "User by username: " + newPlayer.Username + " has been successfully added!"
@@ -497,32 +511,32 @@ func showPlayers(res http.ResponseWriter, _ *http.Request) {
 
 // This is one of the endpoint functions that stores the users submitted answers, then
 // Sets the users score and response with a Response struct parsed into json
-func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-
-	var submitAnswerRequest api.SubmitAnswersRequest
-	_ = json.Unmarshal(reqBody, &submitAnswerRequest)
-
-	currentUser := searchUsersByID(submitAnswerRequest.UserID)
-	currentUser.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
-	currentUser.Score = 0
-
-	for i := range ListOfQuestions {
-		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
-			currentUser.Score++
-		}
-	}
-
-	updateUser(currentUser)
-
-	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
-
-	responseMessage := api.Response{
-		Message: message,
-	}
-
-	_ = json.NewEncoder(res).Encode(responseMessage)
-}
+// func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
+// 	reqBody, _ := ioutil.ReadAll(req.Body)
+//
+// 	var submitAnswerRequest api.SubmitAnswersRequest
+// 	_ = json.Unmarshal(reqBody, &submitAnswerRequest)
+//
+// 	currentUser := searchUsersByID(submitAnswerRequest.UserID)
+// 	currentUser.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
+// 	currentUser.Score = 0
+//
+// 	for i := range ListOfQuestions {
+// 		if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
+// 			currentUser.Score++
+// 		}
+// 	}
+//
+// 	updateUser(currentUser)
+//
+// 	message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
+//
+// 	responseMessage := api.Response{
+// 		Message: message,
+// 	}
+//
+// 	_ = json.NewEncoder(res).Encode(responseMessage)
+// }
 
 // This updates the user answers in memory
 func updateUser(user pkg.User) {
@@ -534,39 +548,39 @@ func updateUser(user pkg.User) {
 }
 
 // Compare stats endpoint func that returns the message with how the user did compare to others
-func compareUserScores(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-	var compareUsersRequest api.CompareUsersRequest
-	_ = json.Unmarshal(reqBody, &compareUsersRequest)
-
-	user := searchUsersByID(compareUsersRequest.UserID)
-
-	message := ""
-	errorFound := false
-	if len(user.SubmittedAnswers) < 1 {
-		message = "Start playing to compare results!"
-		errorFound = true
-	} else {
-		x := getUserComparisonScore(user)
-
-		negative := math.Signbit(x)
-
-		userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
-
-		if negative {
-			message = "You did " + userScoreComparison + "% worse than everyone!"
-		} else {
-			message = "You did " + userScoreComparison + "% better than everyone!"
-		}
-	}
-
-	responseMessage := api.Response{
-		Message: message,
-		Error:   errorFound,
-	}
-
-	_ = json.NewEncoder(res).Encode(responseMessage)
-}
+// func compareUserScores(res http.ResponseWriter, req *http.Request) {
+// 	reqBody, _ := ioutil.ReadAll(req.Body)
+// 	var compareUsersRequest api.CompareUsersRequest
+// 	_ = json.Unmarshal(reqBody, &compareUsersRequest)
+//
+// 	user := searchUsersByID(compareUsersRequest.UserID)
+//
+// 	message := ""
+// 	errorFound := false
+// 	if len(user.SubmittedAnswers) < 1 {
+// 		message = "Start playing to compare results!"
+// 		errorFound = true
+// 	} else {
+// 		x := getUserComparisonScore(user)
+//
+// 		negative := math.Signbit(x)
+//
+// 		userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
+//
+// 		if negative {
+// 			message = "You did " + userScoreComparison + "% worse than everyone!"
+// 		} else {
+// 			message = "You did " + userScoreComparison + "% better than everyone!"
+// 		}
+// 	}
+//
+// 	responseMessage := api.Response{
+// 		Message: message,
+// 		Error:   errorFound,
+// 	}
+//
+// 	_ = json.NewEncoder(res).Encode(responseMessage)
+// }
 
 // HELPER FUNCTIONS
 
@@ -617,42 +631,42 @@ func searchUsersForUsername(userName string) pkg.User {
 }
 
 // Goes through list of users and returns user with correct ID or nothing
-func searchUsersByID(ID int) pkg.User {
-	user := pkg.User{}
-
-	for _, userFromList := range ListOfUsers {
-		if userFromList.ID == ID {
-			user = userFromList
-			break
-		}
-	}
-
-	return user
-}
+// func searchUsersByID(ID int) pkg.User {
+// 	user := pkg.User{}
+//
+// 	for _, userFromList := range ListOfUsers {
+// 		if userFromList.ID == ID {
+// 			user = userFromList
+// 			break
+// 		}
+// 	}
+//
+// 	return user
+// }
 
 // This calculates the comparison percentage the user has from other users
-func getUserComparisonScore(currentUser pkg.User) float64 {
-
-	var listOfScores []int
-
-	var sumPercentages int
-
-	for i := range ListOfUsers {
-		if ListOfUsers[i].ID != currentUser.ID {
-			scorePercentage := ListOfUsers[i].Score * 20
-			sumPercentages += scorePercentage
-			listOfScores = append(listOfScores, scorePercentage)
-		}
-	}
-
-	averagePercentage := float64(sumPercentages) / (float64(len(listOfScores)))
-
-	scorePercentage := float64(currentUser.Score * 20)
-
-	x := scorePercentage - averagePercentage
-
-	return x
-}
+// func getUserComparisonScore(currentUser pkg.User) float64 {
+//
+// 	var listOfScores []int
+//
+// 	var sumPercentages int
+//
+// 	for i := range ListOfUsers {
+// 		if ListOfUsers[i].ID != currentUser.ID {
+// 			scorePercentage := ListOfUsers[i].Score * 20
+// 			sumPercentages += scorePercentage
+// 			listOfScores = append(listOfScores, scorePercentage)
+// 		}
+// 	}
+//
+// 	averagePercentage := float64(sumPercentages) / (float64(len(listOfScores)))
+//
+// 	scorePercentage := float64(currentUser.Score * 20)
+//
+// 	x := scorePercentage - averagePercentage
+//
+// 	return x
+// }
 
 // COBRA FUNCS
 
