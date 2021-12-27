@@ -53,10 +53,12 @@ func main() {
 
 	logger.Info("🚀 Setting up migrations")
 
-	err = quizDBConn.Migrator().AutoMigrate(&pkg.User{}, &pkg.Game{})
+	err = quizDBConn.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&pkg.User{}, &pkg.Game{}, &pkg.Question{}, &pkg.Answer{}, &pkg.UserAnswer{})
 	if err != nil {
 		logger.Fatal("something went wrong migrating schema", zap.Error(err))
 	}
+
+	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
 	_ = services.NewQuizService(quizDBConn)
 
