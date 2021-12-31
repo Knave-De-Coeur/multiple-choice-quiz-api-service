@@ -53,10 +53,27 @@ func main() {
 
 	logger.Info("🚀 Setting up migrations")
 
-	err = quizDBConn.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&pkg.User{}, &pkg.Game{}, &pkg.Question{}, &pkg.Answer{}, &pkg.UserAnswer{})
+	// set up schema
+	err = quizDBConn.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+		&pkg.User{},
+		&pkg.UserGames{},
+		&pkg.Game{},
+		&pkg.Question{},
+		&pkg.Answer{},
+		&pkg.UserAnswers{},
+	)
 	if err != nil {
 		logger.Fatal("something went wrong migrating schema", zap.Error(err))
 	}
+
+	// set up dummy data
+	quizDBConn.CreateInBatches(
+		[]pkg.User{
+			{Name: "David Smith", Age: 54, Username: "david54", Password: "pass54"},
+			{Name: "John Doe", Age: 14, Username: "johndoe14", Password: "pass14"},
+			{Name: "Steve Borg", Age: 28, Username: "steve321", Password: "qwerty321"},
+		},
+		3) // TODO: solve issue of duplicate rows, include a migrations table.
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 

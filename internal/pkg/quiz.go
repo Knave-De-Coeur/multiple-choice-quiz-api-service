@@ -41,10 +41,14 @@ type Answer struct {
 	IsCorrect  bool
 }
 
-// TODO: figure out how to manage fks here
-// UserAnswer is the answer supplied by the user for the question of the game
-type UserAnswer struct {
+// UserGames is user_games table in quiz db.
+type UserGames struct {
+	UserID uint
+	GameID uint
+}
+
+// UserAnswers is the user_answers table in quiz db.
+type UserAnswers struct {
 	UserID   uint
 	AnswerID uint
-	GameID   uint
 }
