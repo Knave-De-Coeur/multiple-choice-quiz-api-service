@@ -7,7 +7,7 @@ import (
 )
 
 func fallbackConfigs() {
-	viper.SetDefault("DB_CONNECTION_FORMAT", "%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&parseTime=True&loc=Local")
+	viper.SetDefault("DB_CONNECTION_FORMAT", "%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true")
 	viper.SetDefault("MYSQL_DB", "quiz")
 	viper.SetDefault("MYSQL_USER", "quiz")
 	viper.SetDefault("MYSQL_PASSWORD", "quizsecret")

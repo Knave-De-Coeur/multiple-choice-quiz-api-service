@@ -22,7 +22,6 @@ import (
 	"go.uber.org/zap"
 
 	"quiz-api-service/internal/config"
-	"quiz-api-service/internal/pkg"
 	"quiz-api-service/internal/services"
 	"quiz-api-service/internal/utils"
 )
@@ -51,29 +50,20 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Setup connection to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	logger.Info("🚀 Setting up migrations")
+	logger.Info("🚀 Running migrations")
 
-	// set up schema
-	err = quizDBConn.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
-		&pkg.User{},
-		&pkg.UserGames{},
-		&pkg.Game{},
-		&pkg.Question{},
-		&pkg.Answer{},
-		&pkg.UserAnswers{},
-	)
-	if err != nil {
-		logger.Fatal("something went wrong migrating schema", zap.Error(err))
+	if err = utils.SetUpSchema(quizDBConn, logger); err != nil {
+		logger.Fatal(err.Error())
 	}
 
-	// set up dummy data
-	quizDBConn.CreateInBatches(
-		[]pkg.User{
-			{Name: "David Smith", Age: 54, Username: "david54", Password: "pass54"},
-			{Name: "John Doe", Age: 14, Username: "johndoe14", Password: "pass14"},
-			{Name: "Steve Borg", Age: 28, Username: "steve321", Password: "qwerty321"},
-		},
-		3) // TODO: solve issue of duplicate rows, include a migrations table.
+	db, err := quizDBConn.DB()
+	if err != nil {
+		logger.Fatal("something went wrong getting the database conn from gorm", zap.Error(err))
+	}
+
+	if err = utils.RunUpMigrations(db, logger); err != nil {
+		logger.Fatal(err.Error())
+	}
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 

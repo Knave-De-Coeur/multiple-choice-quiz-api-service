@@ -1,14 +1,20 @@
 package utils
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang-migrate/migrate/v4"
+	migrateMysql "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"go.uber.org/zap"
-	"gorm.io/driver/mysql"
+	gormMysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"quiz-api-service/internal/config"
+	"quiz-api-service/internal/pkg"
 )
 
 // GetDBConnectionString uses configs to generate a connection string to the db
@@ -21,7 +27,7 @@ func GetDBConnection(user, pass, host, dbName string, logger *zap.Logger) (*gorm
 
 	dsn := GetDBConnectionString(user, pass, host, dbName)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(gormMysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		logger.Error("❌ something went wrong getting the db connection", zap.String("method", "GetDBConnection"), zap.Error(err))
 		return nil, err
@@ -60,4 +66,43 @@ func SetUpDBConnection(user, pass, host, dbName string, logger *zap.Logger) (*go
 	sqlDB.SetConnMaxLifetime(lifeTime)
 
 	return db, nil
+}
+
+// SetUpSchema uses the current structs to generate tables
+func SetUpSchema(db *gorm.DB, logger *zap.Logger) (err error) {
+	// set up schema
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+		&pkg.User{},
+		&pkg.UserGames{},
+		&pkg.Game{},
+		&pkg.Question{},
+		&pkg.Answer{},
+		&pkg.UserAnswers{},
+	)
+	if err != nil {
+		logger.Error("something went wrong migrating schema", zap.Error(err))
+	}
+
+	return
+}
+
+// RunUpMigrations uses db connection and locations of migration to run all the up migrations
+func RunUpMigrations(db *sql.DB, logger *zap.Logger) (err error) {
+
+	driver, _ := migrateMysql.WithInstance(db, &migrateMysql.Config{})
+	m, err := migrate.NewWithDatabaseInstance("file://internal/migrations", "sql", driver)
+	if err != nil {
+		logger.Error("❌ failed to get migration instance", zap.Error(err))
+		return err
+	}
+
+	err = m.Up()
+	if err == migrate.ErrNoChange {
+		logger.Info("✅ no migrations were ran on db, all up to date!")
+	} else if err != nil {
+		logger.Error("❌ failed to run migrations", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
