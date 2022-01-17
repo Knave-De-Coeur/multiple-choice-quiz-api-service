@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/spf13/cobra"
@@ -44,6 +46,7 @@ var FullHostname string
 
 type QuizService struct {
 	DBConn *gorm.DB
+	Logger *zap.Logger
 }
 
 type QuizServices interface {
@@ -87,9 +90,6 @@ var rootCmd = &cobra.Command{
 
 		wg.Add(2)
 
-		// creates server and sets endpoints
-		go handleRequests()
-
 		// runs game
 		// go runGame()
 
@@ -97,11 +97,11 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// handleRequests sets up the server and the endpoints
-func handleRequests() {
+// HandleRequests sets up the server and the endpoints
+func (s *QuizService) HandleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homePage)
-	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
+	myRouter.HandleFunc("/new-player", s.CreateUser).Methods("POST")
 	myRouter.HandleFunc("/login", login).Methods("POST")
 	myRouter.HandleFunc("/logout", logout).Methods("POST")
 	// myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
@@ -223,45 +223,6 @@ func handleRequests() {
 // 				'b': "2019",
 // 				'c': "1999",
 // 			},
-// 		},
-// 	}
-// }
-//
-// // This simply populates the ListOfUsers with dummy data
-// func generateDummyUsers() {
-// 	ListOfUsers = []pkg.User{
-// 		{
-// 			ID:       1,
-// 			Name:     "David Smith",
-// 			Age:      54,
-// 			Username: "david54",
-// 			Password: "pass765",
-// 			SubmittedAnswers: []rune{
-// 				'a', 'c', 'b', 'b', 'c',
-// 			},
-// 			Score: 2,
-// 		},
-// 		{
-// 			ID:       2,
-// 			Name:     "John Doe",
-// 			Age:      14,
-// 			Username: "johndoe14",
-// 			Password: "pass14",
-// 			SubmittedAnswers: []rune{
-// 				'a', 'a', 'b', 'c', 'c',
-// 			},
-// 			Score: 3,
-// 		},
-// 		{
-// 			ID:       3,
-// 			Name:     "Steve Bord",
-// 			Age:      28,
-// 			Username: "seteveb321",
-// 			Password: "qwerty098",
-// 			SubmittedAnswers: []rune{
-// 				'c', 'b', 'c', 'c', 'c',
-// 			},
-// 			Score: 2,
 // 		},
 // 	}
 // }
@@ -400,7 +361,12 @@ func postToEndpoint(data interface{}, endpoint string) bool {
 	res, err := http.Post(FullHostname+endpoint, "application/json", bytes.NewBuffer(requestJSON))
 	check(err)
 
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Fatalf("something went wrong reading from the post response")
+		}
+	}(res.Body)
 
 	var responseMessage api.Response
 
@@ -473,14 +439,20 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(res).Encode(resMessage)
 }
 
-// Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
-func addNewUser(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
+// CreateUser Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
+func (s *QuizService) CreateUser(res http.ResponseWriter, req *http.Request) {
+	reqBody, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		s.Logger.Fatal("something went wrong reading the body")
+	}
+
 	var newPlayer pkg.User
 	_ = json.Unmarshal(reqBody, &newPlayer)
 
 	message := ""
 	errorFound := false
+
+	// TODO: re-do validation
 	for _, u := range ListOfUsers {
 		if newPlayer.Username == u.Username {
 			message = "Username " + u.Username + " is taken please try again."
@@ -491,17 +463,32 @@ func addNewUser(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if !errorFound {
-		ListOfUsers = append(ListOfUsers, newPlayer)
-		message = "User by username: " + newPlayer.Username + " has been successfully added!"
+	if errorFound {
+		responseMessage := api.Response{
+			Message: message,
+			Error:   errorFound,
+		}
+
+		err = json.NewEncoder(res).Encode(responseMessage)
+		if err != nil {
+			s.Logger.Fatal("something went wrong encoding the response body")
+		}
+
+		return
 	}
 
-	responseMessage := api.Response{
-		Message: message,
-		Error:   errorFound,
+	s.DBConn.Exec(`INSERT INTO user VALUES ?, ?, ?, ?, ?`, newPlayer)
+
+	err = json.NewEncoder(res).Encode(api.Response{
+		Message: "OK",
+		Data:    newPlayer,
+		Error:   false,
+	})
+	if err != nil {
+		s.Logger.Fatal("something went wrong encoding the response body")
 	}
 
-	_ = json.NewEncoder(res).Encode(responseMessage)
+	return
 }
 
 // GET rest endpoint func that simply displays list of users in json

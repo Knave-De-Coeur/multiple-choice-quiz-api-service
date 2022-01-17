@@ -33,7 +33,12 @@ func main() {
 		log.Fatalf("somethign went wrong setting up logger for api: %+v", err)
 	}
 
-	defer logger.Sync()
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Printf("something went wrong deferring the close to the logger: %v", err)
+		}
+	}(logger)
 
 	logger.Info("🚀 connecting to db")
 
@@ -67,7 +72,7 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	_ = services.NewQuizService(quizDBConn)
+	quizService := services.NewQuizService(quizDBConn)
 
-	services.Execute()
+	quizService.HandleRequests()
 }

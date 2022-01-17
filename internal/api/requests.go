@@ -25,7 +25,7 @@ type LogoutRequest struct {
 
 // Response is what is returned from the endpoints should an error occur
 type Response struct {
-	Message string                 `json:"message"`
-	Data    map[string]interface{} `json:"data"`
-	Error   bool                   `json:"error"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+	Error   bool        `json:"error"`
 }
