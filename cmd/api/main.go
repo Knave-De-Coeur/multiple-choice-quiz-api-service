@@ -16,15 +16,25 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
+	"quiz-api-service/internal/api"
 	"quiz-api-service/internal/config"
+	"quiz-api-service/internal/pkg"
 	"quiz-api-service/internal/services"
 	"quiz-api-service/internal/utils"
 )
+
+var QuizService *services.QuizService
 
 func main() {
 
@@ -67,7 +77,127 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	_ = services.NewQuizService(quizDBConn)
+	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
+	if err != nil {
+		return
+	}
 
-	services.Execute()
+	QuizService = services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
+		Port:     portNum,
+		Hostname: config.CurrentConfigs.Host,
+	})
+
+	handleRequests()
+}
+
+// handleRequests sets up the server and the endpoints
+func handleRequests() {
+	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/", homePage)
+	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
+	myRouter.HandleFunc("/login", login).Methods("POST")
+	myRouter.HandleFunc("/logout", logout).Methods("POST")
+	// myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
+	// myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
+	myRouter.HandleFunc("/players", showPlayers)
+	log.Fatal(http.ListenAndServe(":"+config.CurrentConfigs.Port, myRouter))
+}
+
+// REST FUNCTIONS
+
+// One of the endpoints that shows the homepage
+func homePage(res http.ResponseWriter, _ *http.Request) {
+	_, _ = fmt.Fprintf(res, "Welcome to the HomePage! Go to the console to start playing.")
+}
+
+// Login endpoint function that checks username and password and sets user appropriately
+func login(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var loginReq api.LoginRequest
+	_ = json.Unmarshal(reqBody, &loginReq)
+
+	currentUser, err := QuizService.GetUserByUsername(loginReq.Username)
+	if err != nil {
+		messageResponse := api.Response{
+			Message: err.Error(),
+			Error:   true,
+		}
+
+		_ = json.NewEncoder(res).Encode(messageResponse)
+		return
+	}
+
+	foundError := false
+	message := ""
+	if currentUser.ID == 0 {
+		message = "User not found: " + loginReq.Username
+	} else if currentUser.Password != strings.TrimSpace(loginReq.Password) {
+		message = "Password is wrong try again."
+	} else {
+		foundError = true
+		message = "Successfully logged in with user: " + currentUser.Username
+	}
+
+	messageResponse := api.Response{
+		Message: message,
+		Error:   foundError,
+	}
+
+	_ = json.NewEncoder(res).Encode(messageResponse)
+
+}
+
+// Logout endpoint function that simply removes the CurrentUserID
+func logout(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+
+	var logoutRequest api.LogoutRequest
+	_ = json.Unmarshal(reqBody, &logoutRequest)
+
+	message := ""
+	foundError := false
+
+	resMessage := api.Response{
+		Message: message,
+		Error:   foundError,
+	}
+
+	_ = json.NewEncoder(res).Encode(resMessage)
+}
+
+// Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
+func addNewUser(res http.ResponseWriter, req *http.Request) {
+	reqBody, _ := ioutil.ReadAll(req.Body)
+	var newPlayer pkg.User
+	_ = json.Unmarshal(reqBody, &newPlayer)
+
+	message := ""
+	errorFound := false
+
+	err := QuizService.InsertUser(&newPlayer)
+	if err != nil {
+		message = err.Error()
+		errorFound = true
+	}
+
+	responseMessage := api.Response{
+		Message: message,
+		Error:   errorFound,
+	}
+
+	_ = json.NewEncoder(res).Encode(responseMessage)
+}
+
+// GET rest endpoint func that simply displays list of users in json
+func showPlayers(res http.ResponseWriter, _ *http.Request) {
+	users, err := QuizService.GetUsers()
+	if err != nil {
+		responseMessage := api.Response{
+			Message: err.Error(),
+			Error:   true,
+		}
+		_ = json.NewEncoder(res).Encode(responseMessage)
+	}
+	_ = json.NewEncoder(res).Encode(users)
 }
