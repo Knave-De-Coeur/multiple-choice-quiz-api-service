@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
 	"quiz-api-service/internal/api"
@@ -82,9 +81,16 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	quizService := services.NewQuizService(quizDBConn)
+	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("port config not int %d", err))
+		return
+	}
 
-	quizService.HandleRequests()
+	QuizService = services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
+		Port:     portNum,
+		Hostname: config.CurrentConfigs.Host,
+	})
 }
 
 // REST FUNCTIONS
