@@ -43,7 +43,12 @@ func main() {
 		log.Fatalf("somethign went wrong setting up logger for api: %+v", err)
 	}
 
-	defer logger.Sync()
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Printf("something went wrong deferring the close to the logger: %v", err)
+		}
+	}(logger)
 
 	logger.Info("🚀 connecting to db")
 
@@ -77,30 +82,9 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
-	if err != nil {
-		return
-	}
+	quizService := services.NewQuizService(quizDBConn)
 
-	QuizService = services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
-		Port:     portNum,
-		Hostname: config.CurrentConfigs.Host,
-	})
-
-	handleRequests()
-}
-
-// handleRequests sets up the server and the endpoints
-func handleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/", homePage)
-	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
-	myRouter.HandleFunc("/login", login).Methods("POST")
-	myRouter.HandleFunc("/logout", logout).Methods("POST")
-	// myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
-	// myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
-	myRouter.HandleFunc("/players", showPlayers)
-	log.Fatal(http.ListenAndServe(":"+config.CurrentConfigs.Port, myRouter))
+	quizService.HandleRequests()
 }
 
 // REST FUNCTIONS
