@@ -43,10 +43,10 @@ func main() {
 	}
 
 	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			fmt.Printf("something went wrong deferring the close to the logger: %v", err)
-		}
+		_ = logger.Sync()
+		// if err != nil {
+		// 	fmt.Printf("something went wrong deferring the close to the logger: %v", err)
+		// }
 	}(logger)
 
 	logger.Info("🚀 connecting to db")

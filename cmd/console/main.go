@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -76,59 +77,60 @@ func init() {
 }
 
 // // This is one of the main goroutines of the application that runs the user interface part
-// func runGame() {
-// 	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
-//
-// 	reader := bufio.NewReader(os.Stdin)
-// 	key, _ := reader.ReadString('\n')
-//
-// 	if len(key) > 0 {
-// 		for {
-// 			fmt.Println("Enter option letter and press enter")
-//
-// 			if CurrentUserID == 0 {
-// 				fmt.Println("a: Sign Up")
-// 				fmt.Println("b: Login")
-// 				fmt.Println("c: Exit")
-//
-// 				optionStr, _ := reader.ReadString('\n')
-//
-// 				option := []rune(optionStr)
-//
-// 				switch option[0] {
-// 				case 'a':
-// 					createUser(reader)
-// 				case 'b':
-// 					loginPrompt(reader)
-// 				case 'c':
-// 					os.Exit(0)
-// 				default:
-// 					fmt.Println("Invalid try again")
-// 				}
-// 			} else {
-// 				fmt.Println("a: Play")
-// 				fmt.Println("b: Logout")
-// 				fmt.Println("c: Compare")
-// 				fmt.Println("d: Exit")
-//
-// 				optionStr, _ := reader.ReadString('\n')
-//
-// 				option := []rune(optionStr)
-//
-// 				switch option[0] {
-// 				case 'a':
-// 					play(reader)
-// 				case 'b':
-// 					logoutPrompt()
-// 				case 'c':
-// 					compare()
-// 				case 'd':
-// 					os.Exit(0)
-// 				default:
-// 					fmt.Println("Invalid try again")
-// 				}
-// 			}
-//
-// 		}
-// 	}
-// }
+func runGame() {
+	fmt.Println("Welcome to Alex's quiz! Press enter to begin.")
+
+	reader := bufio.NewReader(os.Stdin)
+	key, _ := reader.ReadString('\n')
+
+	if len(key) > 0 {
+		for {
+			fmt.Println("Enter option letter and press enter")
+
+			// TODO: re-do flow
+			// if CurrentUserID == 0 {
+			// 	fmt.Println("a: Sign Up")
+			// 	fmt.Println("b: Login")
+			// 	fmt.Println("c: Exit")
+			//
+			// 	optionStr, _ := reader.ReadString('\n')
+			//
+			// 	option := []rune(optionStr)
+			//
+			// 	switch option[0] {
+			// 	case 'a':
+			// 		createUser(reader)
+			// 	case 'b':
+			// 		loginPrompt(reader)
+			// 	case 'c':
+			// 		os.Exit(0)
+			// 	default:
+			// 		fmt.Println("Invalid try again")
+			// 	}
+			// } else {
+			// 	fmt.Println("a: Play")
+			// 	fmt.Println("b: Logout")
+			// 	fmt.Println("c: Compare")
+			// 	fmt.Println("d: Exit")
+			//
+			// 	optionStr, _ := reader.ReadString('\n')
+			//
+			// 	option := []rune(optionStr)
+			//
+			// 	switch option[0] {
+			// 	case 'a':
+			// 		play(reader)
+			// 	case 'b':
+			// 		logoutPrompt()
+			// 	case 'c':
+			// 		compare()
+			// 	case 'd':
+			// 		os.Exit(0)
+			// 	default:
+			// 		fmt.Println("Invalid try again")
+			// 	}
+			// }
+
+		}
+	}
+}

@@ -23,6 +23,7 @@ type QuizServices interface {
 	InsertUser(user *pkg.User) error
 	GetUsers() ([]pkg.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
+	GetUserByID(uID uint) (*pkg.User, error)
 	// GetQuestions() error
 	// GetScore() error
 	// CompareScores() error
@@ -55,7 +56,7 @@ func (service *QuizService) GetUsers() ([]pkg.User, error) {
 
 	var users []pkg.User
 	// Get all records
-	res := service.DBConn.Find(&users)
+	res := service.DBConn.Select("name", "age", "username").Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
 	}
@@ -70,7 +71,22 @@ func (service *QuizService) GetUserByUsername(username string) (*pkg.User, error
 
 	var user pkg.User
 	// Get all records
-	res := service.DBConn.Where("username = ?", username).First(&user)
+	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("username = ?", username).First(&user)
+	if res.Error != nil {
+		service.logger.Error("something went wrong getting player by username", zap.Error(res.Error), zap.String("username", username))
+	}
+
+	service.logger.Debug("user grabbed", zap.Any("user", user))
+
+	return &user, nil
+}
+
+// GetUserByID grabs from table by id
+func (service *QuizService) GetUserByID(uID uint) (*pkg.User, error) {
+
+	var user pkg.User
+	// Get all records
+	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("id = ?", uID).First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by ID", zap.Error(res.Error))
 	}
@@ -79,18 +95,6 @@ func (service *QuizService) GetUserByUsername(username string) (*pkg.User, error
 
 	return &user, nil
 }
-
-// Compare console func that simply posts to the endpoint and displays the message
-// func compare() bool {
-// 	currentUser := searchUsersByID(CurrentUserID)
-//
-// 	requestData := api.CompareUsersRequest{
-// 		UserID:    currentUser.ID,
-// 		UserScore: currentUser.Score,
-// 	}
-//
-// 	return PostToEndpoint(requestData, "compare-your-score")
-// }
 
 // Compare stats endpoint func that returns the message with how the user did compare to others
 // func compareUserScores(res http.ResponseWriter, req *http.Request) {
