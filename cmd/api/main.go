@@ -16,24 +16,19 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"strconv"
-	"strings"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
-	"quiz-api-service/internal/api"
 	"quiz-api-service/internal/config"
-	"quiz-api-service/internal/pkg"
+	"quiz-api-service/internal/handlers"
 	"quiz-api-service/internal/services"
 	"quiz-api-service/internal/utils"
 )
-
-var QuizService *services.QuizService
 
 func main() {
 
@@ -81,113 +76,40 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
+	routes, err := setUpRoutes(quizDBConn, logger)
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("port config not int %d", err))
-		return
+		logger.Fatal(err.Error())
 	}
 
-	QuizService = services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
+	err = routes.Run()
+	if err != nil {
+		logger.Fatal("something went wrong setting up router")
+	}
+}
+
+// setUpRoutes adds routes and returns gin engine
+func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
+
+	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
+	if err != nil {
+		logger.Error(fmt.Sprintf("port config not int %d", err))
+		return nil, err
+	}
+
+	quizService := services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
 		Port:     portNum,
 		Hostname: config.CurrentConfigs.Host,
 	})
-}
 
-// REST FUNCTIONS
+	r := gin.Default()
 
-// One of the endpoints that shows the homepage
-func homePage(res http.ResponseWriter, _ *http.Request) {
-	_, _ = fmt.Fprintf(res, "Welcome to the HomePage! Go to the console to start playing.")
-}
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
 
-// Login endpoint function that checks username and password and sets user appropriately
-func login(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
+	handlers.NewUserHandler(quizService).UserRoutes(r.Group("users"))
 
-	var loginReq api.LoginRequest
-	_ = json.Unmarshal(reqBody, &loginReq)
-
-	currentUser, err := QuizService.GetUserByUsername(loginReq.Username)
-	if err != nil {
-		messageResponse := api.Response{
-			Message: err.Error(),
-			Error:   true,
-		}
-
-		_ = json.NewEncoder(res).Encode(messageResponse)
-		return
-	}
-
-	foundError := false
-	message := ""
-	if currentUser.ID == 0 {
-		message = "User not found: " + loginReq.Username
-	} else if currentUser.Password != strings.TrimSpace(loginReq.Password) {
-		message = "Password is wrong try again."
-	} else {
-		foundError = true
-		message = "Successfully logged in with user: " + currentUser.Username
-	}
-
-	messageResponse := api.Response{
-		Message: message,
-		Error:   foundError,
-	}
-
-	_ = json.NewEncoder(res).Encode(messageResponse)
-
-}
-
-// Logout endpoint function that simply removes the CurrentUserID
-func logout(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-
-	var logoutRequest api.LogoutRequest
-	_ = json.Unmarshal(reqBody, &logoutRequest)
-
-	message := ""
-	foundError := false
-
-	resMessage := api.Response{
-		Message: message,
-		Error:   foundError,
-	}
-
-	_ = json.NewEncoder(res).Encode(resMessage)
-}
-
-// Add player rest endpoint simply adds the posted user details to the global param ListOfUsers
-func addNewUser(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-	var newPlayer pkg.User
-	_ = json.Unmarshal(reqBody, &newPlayer)
-
-	message := ""
-	errorFound := false
-
-	err := QuizService.InsertUser(&newPlayer)
-	if err != nil {
-		message = err.Error()
-		errorFound = true
-	}
-
-	responseMessage := api.Response{
-		Message: message,
-		Error:   errorFound,
-	}
-
-	_ = json.NewEncoder(res).Encode(responseMessage)
-}
-
-// GET rest endpoint func that simply displays list of users in json
-func showPlayers(res http.ResponseWriter, _ *http.Request) {
-	users, err := QuizService.GetUsers()
-	if err != nil {
-		responseMessage := api.Response{
-			Message: err.Error(),
-			Error:   true,
-		}
-		_ = json.NewEncoder(res).Encode(responseMessage)
-	}
-	_ = json.NewEncoder(res).Encode(users)
+	return r, nil
 }
