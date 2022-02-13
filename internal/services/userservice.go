@@ -1,9 +1,12 @@
 package services
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"quiz-api-service/internal/api"
 	"quiz-api-service/internal/pkg"
 )
 
@@ -24,6 +27,7 @@ type UserServices interface {
 	GetUsers() ([]pkg.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
 	GetUserByID(uID uint) (*pkg.User, error)
+	Login(request api.LoginRequest) (*pkg.User, error)
 }
 
 func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSettings) *UserService {
@@ -73,6 +77,7 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("username = ?", username).First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by username", zap.Error(res.Error), zap.String("username", username))
+		return nil, res.Error
 	}
 
 	service.logger.Debug("user grabbed", zap.Any("user", user))
@@ -88,11 +93,27 @@ func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
 	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("id = ?", uID).First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by ID", zap.Error(res.Error))
+		return nil, res.Error
 	}
 
 	service.logger.Debug("user grabbed", zap.Any("user", user))
 
 	return &user, nil
+}
+
+// Login is a wrapper for the GetUserByUsername that also validates the password
+func (service *UserService) Login(request api.LoginRequest) (*pkg.User, error) {
+
+	user, err := service.GetUserByUsername(request.Username)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.Password != request.Password {
+		return nil, fmt.Errorf("invalid passord for user")
+	}
+
+	return user, nil
 }
 
 // Compare stats endpoint func that returns the message with how the user did compare to others

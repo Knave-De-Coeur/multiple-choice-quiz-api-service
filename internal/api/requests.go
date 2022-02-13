@@ -22,10 +22,3 @@ type CompareUsersRequest struct {
 type LogoutRequest struct {
 	UserID int `json:"user_id"`
 }
-
-// Response is what is returned from the endpoints should an error occur
-type Response struct {
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
-	Error   bool        `json:"error"`
-}

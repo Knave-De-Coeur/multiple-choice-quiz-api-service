@@ -8,8 +8,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"quiz-api-service/internal/api"
+	"quiz-api-service/internal/pkg"
 	"quiz-api-service/internal/services"
 )
 
@@ -26,9 +28,13 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 // UserRoutes sets up user routes with accompanying methods for processing
 func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
 
-	r.GET("", handler.getUsers).
+	r.POST("login", handler.login)
+
+	r.Group("users").
+		GET("", handler.getUsers).
 		GET("username/:username", handler.getUserByUsername).
-		GET("id/:uID", handler.getUserByID)
+		GET("id/:uID", handler.getUserByID).
+		POST("new", handler.newUser)
 
 	return
 }
@@ -37,11 +43,11 @@ func (handler *UserHandler) getUsers(c *gin.Context) {
 
 	users, err := handler.UserService.GetUsers()
 	if err != nil {
-		err = c.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get users", nil, err))
 		return
 	}
 
-	c.JSON(200, users)
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully grabbed all users", users, nil))
 	return
 }
 
@@ -50,17 +56,17 @@ func (handler *UserHandler) getUserByUsername(c *gin.Context) {
 	username := c.Param("username")
 
 	if username == "" {
-		_ = c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing username in url"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("failed to get username from url", nil, fmt.Errorf("missing url")))
 		return
 	}
 
-	users, err := handler.UserService.GetUserByUsername(username)
+	user, err := handler.UserService.GetUserByUsername(username)
 	if err != nil {
-		err = c.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get user by username", nil, err))
 		return
 	}
 
-	c.JSON(200, users)
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
 	return
 }
 
@@ -70,20 +76,38 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 	userIDint, err := strconv.Atoi(userID)
 
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("failed to get userID", nil, err))
 		return
 	} else if userIDint < 1 {
-		_ = c.AbortWithError(http.StatusBadRequest, fmt.Errorf("invalid user id"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("failed to get user", nil, fmt.Errorf("invalid user id")))
 		return
 	}
 
-	users, err := handler.UserService.GetUserByID(uint(userIDint))
+	user, err := handler.UserService.GetUserByID(uint(userIDint))
 	if err != nil {
-		err = c.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get user", nil, err))
 		return
 	}
 
-	c.JSON(200, users)
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
+	return
+}
+
+func (handler *UserHandler) newUser(c *gin.Context) {
+
+	var user pkg.User
+
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to parse new user request", nil, err))
+		return
+	}
+
+	if err := handler.UserService.InsertUser(&user); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
 	return
 }
 
@@ -100,65 +124,26 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 // 	log.Fatal(http.ListenAndServe(":"+config.CurrentConfigs.Port, myRouter))
 // }
 
-// One of the endpoints that shows the homepage
-func homePage(res http.ResponseWriter, _ *http.Request) {
-	_, _ = fmt.Fprintf(res, "Welcome to the HomePage! Go to the console to start playing.")
-}
-
 // Login endpoint function that checks username and password and sets user appropriately
-// func login(res http.ResponseWriter, req *http.Request) {
-// 	reqBody, _ := ioutil.ReadAll(req.Body)
-//
-// 	var loginReq api.LoginRequest
-// 	_ = json.Unmarshal(reqBody, &loginReq)
-//
-// 	currentUser, err := UserService.GetUserByUsername(loginReq.Username)
-// 	if err != nil {
-// 		messageResponse := api.Response{
-// 			Message: err.Error(),
-// 			Error:   true,
-// 		}
-//
-// 		_ = json.NewEncoder(res).Encode(messageResponse)
-// 		return
-// 	}
-//
-// 	foundError := false
-// 	message := ""
-// 	if currentUser.ID == 0 {
-// 		message = "User not found: " + loginReq.Username
-// 	} else if currentUser.Password != strings.TrimSpace(loginReq.Password) {
-// 		message = "Password is wrong try again."
-// 	} else {
-// 		foundError = true
-// 		message = "Successfully logged in with user: " + currentUser.Username
-// 	}
-//
-// 	messageResponse := api.Response{
-// 		Message: message,
-// 		Error:   foundError,
-// 	}
-//
-// 	_ = json.NewEncoder(res).Encode(messageResponse)
-//
-// }
+func (handler *UserHandler) login(c *gin.Context) {
+	var loginReq api.LoginRequest
 
-// Logout endpoint function that simply removes the CurrentUserID
-func logout(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-
-	var logoutRequest api.LogoutRequest
-	_ = json.Unmarshal(reqBody, &logoutRequest)
-
-	message := ""
-	foundError := false
-
-	resMessage := api.Response{
-		Message: message,
-		Error:   foundError,
+	if err := c.ShouldBindJSON(&loginReq); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("failed to login", nil, err))
+		return
 	}
 
-	_ = json.NewEncoder(res).Encode(resMessage)
+	user, err := handler.UserService.Login(loginReq)
+	if err != nil && err == gorm.ErrRecordNotFound {
+		c.AbortWithStatusJSON(http.StatusNotFound, api.GenerateMessageResponse("failed to login requested user", nil, err))
+		return
+	} else if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to login requested user", nil, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("login successful", user, nil))
+	return
 }
 
 // This is the gameplay section, loops through each question, outputting the questions and possible answers
@@ -292,9 +277,5 @@ func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
 
 	// message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
 
-	responseMessage := api.Response{
-		// Message: message,
-	}
-
-	_ = json.NewEncoder(res).Encode(responseMessage)
+	_ = json.NewEncoder(res).Encode(api.GenerateMessageResponse("", nil, nil))
 }

@@ -112,7 +112,7 @@ func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
 		})
 	})
 
-	handlers.NewUserHandler(userService).UserRoutes(r.Group("users"))
+	handlers.NewUserHandler(userService).UserRoutes(r.Group("/"))
 
 	return r, nil
 }
