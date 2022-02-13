@@ -7,30 +7,27 @@ import (
 	"quiz-api-service/internal/pkg"
 )
 
-type QuizService struct {
+type UserService struct {
 	DBConn   *gorm.DB
 	logger   *zap.Logger
-	settings QuizServiceSettings
+	settings UserServiceSettings
 }
 
-// QuizServiceSettings used to affect code flow
-type QuizServiceSettings struct {
+// UserServiceSettings used to affect code flow
+type UserServiceSettings struct {
 	Port     int
 	Hostname string
 }
 
-type QuizServices interface {
+type UserServices interface {
 	InsertUser(user *pkg.User) error
 	GetUsers() ([]pkg.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
 	GetUserByID(uID uint) (*pkg.User, error)
-	// GetQuestions() error
-	// GetScore() error
-	// CompareScores() error
 }
 
-func NewQuizService(dbConn *gorm.DB, logger *zap.Logger, settings QuizServiceSettings) *QuizService {
-	return &QuizService{
+func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSettings) *UserService {
+	return &UserService{
 		DBConn:   dbConn,
 		logger:   logger,
 		settings: settings,
@@ -38,7 +35,7 @@ func NewQuizService(dbConn *gorm.DB, logger *zap.Logger, settings QuizServiceSet
 }
 
 // InsertUser inserts new user in users table from data passed in arg.
-func (service *QuizService) InsertUser(user *pkg.User) error {
+func (service *UserService) InsertUser(user *pkg.User) error {
 
 	res := service.DBConn.Select("name", "age", "username", "password").Create(user)
 	if res.Error != nil {
@@ -52,13 +49,15 @@ func (service *QuizService) InsertUser(user *pkg.User) error {
 }
 
 // GetUsers returns list of users in db.
-func (service *QuizService) GetUsers() ([]pkg.User, error) {
+func (service *UserService) GetUsers() ([]pkg.User, error) {
 
 	var users []pkg.User
+
 	// Get all records
 	res := service.DBConn.Select("name", "age", "username").Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
+		return nil, res.Error
 	}
 
 	service.logger.Debug("users grabbed", zap.Int64("number", res.RowsAffected))
@@ -67,7 +66,7 @@ func (service *QuizService) GetUsers() ([]pkg.User, error) {
 }
 
 // GetUserByUsername attempts to retrieve a single row from the users table.
-func (service *QuizService) GetUserByUsername(username string) (*pkg.User, error) {
+func (service *UserService) GetUserByUsername(username string) (*pkg.User, error) {
 
 	var user pkg.User
 	// Get all records
@@ -82,7 +81,7 @@ func (service *QuizService) GetUserByUsername(username string) (*pkg.User, error
 }
 
 // GetUserByID grabs from table by id
-func (service *QuizService) GetUserByID(uID uint) (*pkg.User, error) {
+func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
 
 	var user pkg.User
 	// Get all records

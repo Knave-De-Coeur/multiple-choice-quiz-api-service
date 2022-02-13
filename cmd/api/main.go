@@ -96,20 +96,23 @@ func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
 		return nil, err
 	}
 
-	quizService := services.NewQuizService(quizDBConn, logger, services.QuizServiceSettings{
+	userService := services.NewUserService(quizDBConn, logger, services.UserServiceSettings{
 		Port:     portNum,
 		Hostname: config.CurrentConfigs.Host,
 	})
 
-	r := gin.Default()
+	r := gin.New()
 
+	r.Use(gin.Logger())
+
+	// r.Use(gin.Middleware)
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "pong",
 		})
 	})
 
-	handlers.NewUserHandler(quizService).UserRoutes(r.Group("users"))
+	handlers.NewUserHandler(userService).UserRoutes(r.Group("users"))
 
 	return r, nil
 }

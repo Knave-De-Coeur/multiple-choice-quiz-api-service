@@ -5,33 +5,36 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 
 	"quiz-api-service/internal/api"
 	"quiz-api-service/internal/services"
 )
 
 type UserHandler struct {
-	UserService services.QuizServices
-	Validator   *validator.Validate
+	UserService services.UserServices
 }
 
-func NewUserHandler(service *services.QuizService) *UserHandler {
+func NewUserHandler(service *services.UserService) *UserHandler {
 	return &UserHandler{
 		UserService: service,
 	}
 }
 
+// UserRoutes sets up user routes with accompanying methods for processing
 func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
 
-	r.GET("all", handler.getUsers, nil).
-		GET("details", handler.getUserByUsername, nil).
-		GET(":uID", handler.getUserByID, nil)
+	r.GET("", handler.getUsers).
+		GET("username/:username", handler.getUserByUsername).
+		GET("id/:uID", handler.getUserByID)
+
+	return
 }
 
 func (handler *UserHandler) getUsers(c *gin.Context) {
+
 	users, err := handler.UserService.GetUsers()
 	if err != nil {
 		err = c.AbortWithError(http.StatusInternalServerError, err)
@@ -43,7 +46,15 @@ func (handler *UserHandler) getUsers(c *gin.Context) {
 }
 
 func (handler *UserHandler) getUserByUsername(c *gin.Context) {
-	users, err := handler.UserService.GetUserByUsername("")
+
+	username := c.Param("username")
+
+	if username == "" {
+		_ = c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing username in url"))
+		return
+	}
+
+	users, err := handler.UserService.GetUserByUsername(username)
 	if err != nil {
 		err = c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -54,7 +65,19 @@ func (handler *UserHandler) getUserByUsername(c *gin.Context) {
 }
 
 func (handler *UserHandler) getUserByID(c *gin.Context) {
-	users, err := handler.UserService.GetUserByID(0)
+
+	userID := c.Param("uID")
+	userIDint, err := strconv.Atoi(userID)
+
+	if err != nil {
+		_ = c.AbortWithError(http.StatusBadRequest, err)
+		return
+	} else if userIDint < 1 {
+		_ = c.AbortWithError(http.StatusBadRequest, fmt.Errorf("invalid user id"))
+		return
+	}
+
+	users, err := handler.UserService.GetUserByID(uint(userIDint))
 	if err != nil {
 		err = c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -89,7 +112,7 @@ func homePage(res http.ResponseWriter, _ *http.Request) {
 // 	var loginReq api.LoginRequest
 // 	_ = json.Unmarshal(reqBody, &loginReq)
 //
-// 	currentUser, err := QuizService.GetUserByUsername(loginReq.Username)
+// 	currentUser, err := UserService.GetUserByUsername(loginReq.Username)
 // 	if err != nil {
 // 		messageResponse := api.Response{
 // 			Message: err.Error(),
