@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"quiz-api-service/internal/pkg"
 
 	"quiz-api-service/internal/api"
 )
@@ -38,7 +39,14 @@ func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSet
 }
 
 // InsertUser inserts new user in users table from data passed in arg.
-func (service *UserService) InsertUser(user *api.User) error {
+func (service *UserService) InsertUser(req *api.User) error {
+
+	user := &pkg.User{
+		Name:     req.Name,
+		Username: req.Username,
+		Age:      req.Age,
+		Password: req.Password,
+	}
 
 	res := service.DBConn.Select("name", "age", "username", "password").Create(user)
 	if res.Error != nil {
