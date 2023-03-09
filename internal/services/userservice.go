@@ -126,11 +126,15 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 		return nil, fmt.Errorf("invalid passord for user")
 	}
 
+	// TODO: fix formatting saved in db
+	// currentTime, _ := time.Parse("dd-mm-yyyy hh:mm:ss:ms", time.Now().String())
+	currentTime := time.Now()
+
 	// update record with login timestamp
 	res := service.DBConn.
 		Table("users").
 		Where("id = ?", user.ID).
-		Update("last_login_time_stamp", sql.NullTime{Time: time.Now(), Valid: true})
+		Update("last_login_time_stamp", sql.NullTime{Time: currentTime, Valid: true})
 	if res.Error != nil {
 		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
 		return nil, res.Error
