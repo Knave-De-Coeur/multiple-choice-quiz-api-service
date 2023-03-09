@@ -22,3 +22,13 @@ type CompareUsersRequest struct {
 type LogoutRequest struct {
 	UserID int `json:"user_id"`
 }
+
+type StartGameRequest struct {
+	GameID int `json:"game_id" validate:"required"`
+	UserID int `json:"user_id" validate:"required"`
+}
+
+type FinishGameRequest struct {
+	GameID int `json:"game_id" validate:"required"`
+	UserID int `json:"user_id" validate:"required"`
+}

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -101,6 +101,11 @@ func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
 		Hostname: config.CurrentConfigs.Host,
 	})
 
+	gameService := services.NewGameService(quizDBConn, logger, services.GameServiceSettings{
+		Port:     portNum,
+		Hostname: config.CurrentConfigs.Host,
+	})
+
 	r := gin.New()
 
 	r.Use(gin.Logger())
@@ -113,6 +118,7 @@ func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
 	})
 
 	handlers.NewUserHandler(userService).UserRoutes(r.Group("/"))
+	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/"))
 
 	return r, nil
 }
