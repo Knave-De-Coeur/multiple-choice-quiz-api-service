@@ -1,7 +1,10 @@
 package services
 
 import (
+	"database/sql"
 	"fmt"
+	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -25,7 +28,7 @@ type UserServiceSettings struct {
 type UserServices interface {
 	InsertUser(user *api.User) error
 	GetUsers() ([]api.User, error)
-	GetUserByUsername(username string) (*api.User, error)
+	GetUserByUsername(username string) (*pkg.User, error)
 	GetUserByID(uID uint) (*api.User, error)
 	Login(request api.LoginRequest) (*api.User, error)
 }
@@ -77,11 +80,14 @@ func (service *UserService) GetUsers() ([]api.User, error) {
 }
 
 // GetUserByUsername attempts to retrieve a single row from the users table.
-func (service *UserService) GetUserByUsername(username string) (*api.User, error) {
+func (service *UserService) GetUserByUsername(username string) (*pkg.User, error) {
 
-	var user api.User
+	var user pkg.User
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("username = ?", username).First(&user)
+	res := service.DBConn.
+		Select("id", "name", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
+		Where("username = ?", username).
+		First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by username", zap.Error(res.Error), zap.String("username", username))
 		return nil, res.Error
@@ -120,7 +126,24 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 		return nil, fmt.Errorf("invalid passord for user")
 	}
 
-	return user, nil
+	// update record with login timestamp
+	res := service.DBConn.
+		Table("users").
+		Where("id = ?", user.ID).
+		Update("last_login_time_stamp", sql.NullTime{Time: time.Now(), Valid: true})
+	if res.Error != nil {
+		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
+		return nil, res.Error
+	}
+
+	return &api.User{
+		ID:                 strconv.Itoa(int(user.ID)),
+		Name:               user.Name,
+		Username:           user.Username,
+		LastLoginTimeStamp: time.Now().String(),
+		CreatedAT:          user.CreatedAt.String(),
+		UpdatedAT:          user.UpdatedAt.String(),
+	}, nil
 }
 
 // Compare stats endpoint func that returns the message with how the user did compare to others
