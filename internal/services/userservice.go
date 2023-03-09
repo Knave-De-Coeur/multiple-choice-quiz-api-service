@@ -7,7 +7,6 @@ import (
 	"gorm.io/gorm"
 
 	"quiz-api-service/internal/api"
-	"quiz-api-service/internal/pkg"
 )
 
 type UserService struct {
@@ -23,11 +22,11 @@ type UserServiceSettings struct {
 }
 
 type UserServices interface {
-	InsertUser(user *pkg.User) error
-	GetUsers() ([]pkg.User, error)
-	GetUserByUsername(username string) (*pkg.User, error)
-	GetUserByID(uID uint) (*pkg.User, error)
-	Login(request api.LoginRequest) (*pkg.User, error)
+	InsertUser(user *api.User) error
+	GetUsers() ([]api.User, error)
+	GetUserByUsername(username string) (*api.User, error)
+	GetUserByID(uID uint) (*api.User, error)
+	Login(request api.LoginRequest) (*api.User, error)
 }
 
 func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSettings) *UserService {
@@ -39,7 +38,7 @@ func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSet
 }
 
 // InsertUser inserts new user in users table from data passed in arg.
-func (service *UserService) InsertUser(user *pkg.User) error {
+func (service *UserService) InsertUser(user *api.User) error {
 
 	res := service.DBConn.Select("name", "age", "username", "password").Create(user)
 	if res.Error != nil {
@@ -53,12 +52,12 @@ func (service *UserService) InsertUser(user *pkg.User) error {
 }
 
 // GetUsers returns list of users in db.
-func (service *UserService) GetUsers() ([]pkg.User, error) {
+func (service *UserService) GetUsers() ([]api.User, error) {
 
-	var users []pkg.User
+	var users []api.User
 
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username").Find(&users)
+	res := service.DBConn.Select("name", "age", "username", "created_at", "updated_at", "id").Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
 		return nil, res.Error
@@ -70,9 +69,9 @@ func (service *UserService) GetUsers() ([]pkg.User, error) {
 }
 
 // GetUserByUsername attempts to retrieve a single row from the users table.
-func (service *UserService) GetUserByUsername(username string) (*pkg.User, error) {
+func (service *UserService) GetUserByUsername(username string) (*api.User, error) {
 
-	var user pkg.User
+	var user api.User
 	// Get all records
 	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("username = ?", username).First(&user)
 	if res.Error != nil {
@@ -86,9 +85,9 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 }
 
 // GetUserByID grabs from table by id
-func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
+func (service *UserService) GetUserByID(uID uint) (*api.User, error) {
 
-	var user pkg.User
+	var user api.User
 	// Get all records
 	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("id = ?", uID).First(&user)
 	if res.Error != nil {
@@ -102,7 +101,7 @@ func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
 }
 
 // Login is a wrapper for the GetUserByUsername that also validates the password
-func (service *UserService) Login(request api.LoginRequest) (*pkg.User, error) {
+func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 
 	user, err := service.GetUserByUsername(request.Username)
 	if err != nil {
@@ -150,18 +149,6 @@ func (service *UserService) Login(request api.LoginRequest) (*pkg.User, error) {
 //
 // 	_ = json.NewEncoder(res).Encode(responseMessage)
 // }
-
-// HELPER FUNCTIONS
-
-// Simply check that the answer the user inputted exits
-func isAnswerValid(answers []string, submittedAnswer string) bool {
-	for _, item := range answers {
-		if item == submittedAnswer {
-			return true
-		}
-	}
-	return false
-}
 
 // This calculates the comparison percentage the user has from other users
 // func getUserComparisonScore(currentUser pkg.User) float64 {
