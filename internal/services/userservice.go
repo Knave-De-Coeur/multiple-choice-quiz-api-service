@@ -1,7 +1,6 @@
 package services
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
@@ -126,15 +125,15 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 		return nil, fmt.Errorf("invalid passord for user")
 	}
 
-	// TODO: fix formatting saved in db
-	// currentTime, _ := time.Parse("dd-mm-yyyy hh:mm:ss:ms", time.Now().String())
-	currentTime := time.Now()
+	unixCT := service.DBConn.NowFunc()
+
+	fieldsToUpdate := map[string]interface{}{"last_login_time_stamp": unixCT, "updated_at": unixCT}
 
 	// update record with login timestamp
 	res := service.DBConn.
 		Table("users").
 		Where("id = ?", user.ID).
-		Update("last_login_time_stamp", sql.NullTime{Time: currentTime, Valid: true})
+		Updates(fieldsToUpdate)
 	if res.Error != nil {
 		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
 		return nil, res.Error
@@ -144,9 +143,10 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 		ID:                 strconv.Itoa(int(user.ID)),
 		Name:               user.Name,
 		Username:           user.Username,
-		LastLoginTimeStamp: time.Now().String(),
-		CreatedAT:          user.CreatedAt.String(),
-		UpdatedAT:          user.UpdatedAt.String(),
+		Age:                user.Age,
+		CreatedAT:          user.CreatedAt.Format(time.RFC3339),
+		UpdatedAT:          user.UpdatedAt.Format(time.RFC3339),
+		LastLoginTimeStamp: user.LastLoginTimeStamp.Time.Format(time.RFC3339),
 	}, nil
 }
 

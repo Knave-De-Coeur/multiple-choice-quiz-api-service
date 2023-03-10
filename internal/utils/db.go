@@ -27,7 +27,11 @@ func GetDBConnection(user, pass, host, dbName string, logger *zap.Logger) (*gorm
 
 	dsn := GetDBConnectionString(user, pass, host, dbName)
 
-	db, err := gorm.Open(gormMysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(gormMysql.Open(dsn), &gorm.Config{
+		NowFunc: func() time.Time {
+			return time.Unix(time.Now().Unix(), 0).UTC()
+		},
+	})
 	if err != nil {
 		logger.Error("❌ something went wrong getting the db connection", zap.String("method", "GetDBConnection"), zap.Error(err))
 		return nil, err
