@@ -9,7 +9,9 @@ import (
 // User is generic user that launches and signs up
 type User struct {
 	gorm.Model
-	Name               string       `json:"name"`
+	FirstName          string       `json:"first_name"`
+	LastName           string       `json:"last_name"`
+	Email              string       `json:"email"`
 	Age                int8         `json:"age"`
 	Username           string       `json:"username"`
 	Password           string       `json:"password"`

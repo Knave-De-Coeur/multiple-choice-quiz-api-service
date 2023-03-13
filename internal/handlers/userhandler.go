@@ -109,12 +109,13 @@ func (handler *UserHandler) newUser(c *gin.Context) {
 		return
 	}
 
-	if err := handler.UserService.InsertUser(&user); err != nil {
+	res, err := handler.UserService.InsertUser(&user)
+	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
 		return
 	}
 
-	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully inserted user", res, nil))
 	return
 }
 

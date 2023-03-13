@@ -1,8 +1,10 @@
 package api
 
 type User struct {
-	ID                 string `json:"ID"`
-	Name               string `json:"name" validate:"required"`
+	ID                 string `json:"ID,omitempty"`
+	FirstName          string `json:"first_name" validate:"required"`
+	LastName           string `json:"last_name" validate:"required"`
+	Email              string `json:"email" validate:"required,email"`
 	Age                int8   `json:"age" validate:"required"`
 	Username           string `json:"username" validate:"required"`
 	Password           string `json:"password,omitempty" validate:"required"`

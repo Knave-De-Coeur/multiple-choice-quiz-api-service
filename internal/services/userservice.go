@@ -1,15 +1,20 @@
 package services
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"quiz-api-service/internal/pkg"
 
 	"quiz-api-service/internal/api"
+	"quiz-api-service/internal/pkg"
 )
 
 type UserService struct {
@@ -25,7 +30,7 @@ type UserServiceSettings struct {
 }
 
 type UserServices interface {
-	InsertUser(user *api.User) error
+	InsertUser(user *api.User) (*api.User, error)
 	GetUsers() ([]api.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
 	GetUserByID(uID uint) (*api.User, error)
@@ -41,24 +46,84 @@ func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSet
 }
 
 // InsertUser inserts new user in users table from data passed in arg.
-func (service *UserService) InsertUser(req *api.User) error {
+func (service *UserService) InsertUser(req *api.User) (*api.User, error) {
 
-	user := &pkg.User{
-		Name:     req.Name,
-		Username: req.Username,
-		Age:      req.Age,
-		Password: req.Password,
+	jsonGPR, err := json.Marshal(&api.GeneratePasswordRequest{
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Age:       req.Age,
+		Email:     req.Email,
+		Password:  req.Password,
+	})
+	if err != nil {
+		service.logger.Error(
+			"something went wrong marshalling request",
+			zap.Any("req", req),
+			zap.Error(err))
+		return nil, err
 	}
 
-	res := service.DBConn.Select("name", "age", "username", "password").Create(user)
+	// TODO: replace with some message broker
+	r, err := http.NewRequest("POST", "http://127.0.0.1:8000/users/generate-password", bytes.NewBuffer(jsonGPR))
+	if err != nil {
+		service.logger.Error(
+			"something went wrong generating the password from auth service",
+			zap.Any("req", jsonGPR),
+			zap.Error(err))
+		return nil, err
+	}
+
+	defer r.Body.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		service.logger.Error(
+			"something went wrong reading response from auth service",
+			zap.Any("response", body),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var gpResponse api.GeneratePasswordResponse
+
+	if err = json.Unmarshal(body, &gpResponse); err != nil {
+		service.logger.Error(
+			"something went wrong unmarshalling response from auth service",
+			zap.Any("user", body),
+			zap.Error(err))
+		return nil, err
+	}
+
+	if gpResponse.Password == "" {
+		err = errors.New("empty pass")
+		service.logger.Error(
+			"missing pass from response",
+			zap.Any("res", gpResponse),
+			zap.Error(err))
+		return nil, err
+	}
+
+	user := &pkg.User{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Username:  req.Username,
+		Email:     req.Email,
+		Age:       req.Age,
+		Password:  gpResponse.Password,
+	}
+
+	res := service.DBConn.
+		Select("first_name", "last_name", "email", "age", "username", "password").
+		Create(user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong inserting user", zap.Any("user", user), zap.Error(res.Error))
-		return res.Error
+		return nil, res.Error
 	}
 
 	service.logger.Debug("rows inserted", zap.Int64("rowsAffected", res.RowsAffected))
 
-	return nil
+	return req, nil
 }
 
 // GetUsers returns list of users in db.
@@ -67,7 +132,9 @@ func (service *UserService) GetUsers() ([]api.User, error) {
 	var users []api.User
 
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username", "created_at", "updated_at", "id").Find(&users)
+	res := service.DBConn.
+		Select("first_name", "last_name", "email", "age", "username", "created_at", "updated_at", "id").
+		Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
 		return nil, res.Error
@@ -84,7 +151,7 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 	var user pkg.User
 	// Get all records
 	res := service.DBConn.
-		Select("id", "name", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
+		Select("id", "first_name", "last_name", "email", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
 		Where("username = ?", username).
 		First(&user)
 	if res.Error != nil {
@@ -102,7 +169,10 @@ func (service *UserService) GetUserByID(uID uint) (*api.User, error) {
 
 	var user api.User
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("id = ?", uID).First(&user)
+	res := service.DBConn.
+		Select("first_name", "last_name", "email", "age", "username", "password", "last_login_time_stamp").
+		Where("id = ?", uID).
+		First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by ID", zap.Error(res.Error))
 		return nil, res.Error
@@ -141,7 +211,9 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 
 	return &api.User{
 		ID:                 strconv.Itoa(int(user.ID)),
-		Name:               user.Name,
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Email:              user.Email,
 		Username:           user.Username,
 		Age:                user.Age,
 		CreatedAT:          user.CreatedAt.Format(time.RFC3339),
