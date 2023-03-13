@@ -65,7 +65,18 @@ func (service *UserService) InsertUser(req *api.User) (*api.User, error) {
 	}
 
 	// TODO: replace with some message broker
-	r, err := http.NewRequest("POST", "http://127.0.0.1:8000/users/generate-password", bytes.NewBuffer(jsonGPR))
+	r, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/users/generate-password", bytes.NewReader(jsonGPR))
+	if err != nil {
+		service.logger.Error(
+			"something went wrong generating the password from auth service",
+			zap.Any("req", jsonGPR),
+			zap.Error(err))
+		return nil, err
+	}
+	r.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	response, err := client.Do(r)
 	if err != nil {
 		service.logger.Error(
 			"something went wrong generating the password from auth service",
@@ -74,9 +85,9 @@ func (service *UserService) InsertUser(req *api.User) (*api.User, error) {
 		return nil, err
 	}
 
-	defer r.Body.Close()
+	defer response.Body.Close()
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		service.logger.Error(
 			"something went wrong reading response from auth service",
