@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
 
 	"quiz-api-service/internal/api"
@@ -16,12 +17,14 @@ import (
 )
 
 type UserHandler struct {
+	Nats        *nats.Conn
 	UserService services.UserServices
 	Validator   *validator.Validate
 }
 
-func NewUserHandler(service *services.UserService) *UserHandler {
+func NewUserHandler(service *services.UserService, nc *nats.Conn) *UserHandler {
 	return &UserHandler{
+		Nats:        nc,
 		UserService: service,
 		Validator:   validator.New(),
 	}

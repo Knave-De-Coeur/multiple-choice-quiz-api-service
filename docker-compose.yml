@@ -16,6 +16,7 @@ services:
       quiz-network:
     depends_on:
       - db
+      - nats
 
   db:
     container_name: mysql-v8
@@ -36,9 +37,21 @@ services:
     networks:
       quiz-network:
 
+  nats:
+    image: nats
+    expose:
+      - "4222"
+    ports:
+      - "8222:8222"
+      - "6222:6222"
+      - "4222:4222"
+    networks: [ "nats" ]
+
 
 networks:
   quiz-network:
+  nats:
+    name: nats
 
 volumes:
   quiz-data:

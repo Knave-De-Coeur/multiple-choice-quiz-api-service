@@ -21,9 +21,9 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 	"quiz-api-service/internal/config"
 	"quiz-api-service/internal/handlers"
 	"quiz-api-service/internal/services"
@@ -76,19 +76,29 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
 
-	routes, err := setUpRoutes(quizDBConn, logger)
+	// Connect to a server
+	// nc, err := nats.Connect("nats://127.0.0.1:4222")
+	nc, err := nats.Connect(nats.DefaultURL)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("❌ Failed to set up nats %s", err.Error()))
+	}
+
+	if err = nc.Drain(); err != nil {
+		logger.Fatal(fmt.Sprintf("❌ Failed to drain nats %s", err.Error()))
+	}
+
+	routes, err := setUpRoutes(quizDBConn, nc, logger)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
 
-	err = routes.Run()
-	if err != nil {
+	if err = routes.Run(); err != nil {
 		logger.Fatal("something went wrong setting up router")
 	}
 }
 
 // setUpRoutes adds routes and returns gin engine
-func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
+func setUpRoutes(quizDBConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engine, error) {
 
 	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
 	if err != nil {
@@ -117,7 +127,7 @@ func setUpRoutes(quizDBConn *gorm.DB, logger *zap.Logger) (*gin.Engine, error) {
 		})
 	})
 
-	handlers.NewUserHandler(userService).UserRoutes(r.Group("/"))
+	handlers.NewUserHandler(userService, nc).UserRoutes(r.Group("/"))
 	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/"))
 
 	return r, nil
