@@ -83,9 +83,7 @@ func main() {
 		logger.Fatal(fmt.Sprintf("❌ Failed to set up nats %s", err.Error()))
 	}
 
-	if err = nc.Drain(); err != nil {
-		logger.Fatal(fmt.Sprintf("❌ Failed to drain nats %s", err.Error()))
-	}
+	defer nc.Drain()
 
 	routes, err := setUpRoutes(quizDBConn, nc, logger)
 	if err != nil {
@@ -106,7 +104,7 @@ func setUpRoutes(quizDBConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.E
 		return nil, err
 	}
 
-	userService := services.NewUserService(quizDBConn, logger, services.UserServiceSettings{
+	userService := services.NewUserService(quizDBConn, nc, logger, services.UserServiceSettings{
 		Port:     portNum,
 		Hostname: config.CurrentConfigs.Host,
 	})

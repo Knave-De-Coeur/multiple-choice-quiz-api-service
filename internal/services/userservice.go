@@ -1,15 +1,13 @@
 package services
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -19,6 +17,7 @@ import (
 
 type UserService struct {
 	DBConn   *gorm.DB
+	Nats     *nats.Conn
 	logger   *zap.Logger
 	settings UserServiceSettings
 }
@@ -37,8 +36,9 @@ type UserServices interface {
 	Login(request api.LoginRequest) (*api.User, error)
 }
 
-func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSettings) *UserService {
+func NewUserService(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger, settings UserServiceSettings) *UserService {
 	return &UserService{
+		Nats:     nc,
 		DBConn:   dbConn,
 		logger:   logger,
 		settings: settings,
@@ -47,6 +47,20 @@ func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSet
 
 // InsertUser inserts new user in users table from data passed in arg.
 func (service *UserService) InsertUser(req *api.User) (*api.User, error) {
+
+	users, err := service.GetUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.Email == req.Email {
+			return nil, errors.New("email already registered")
+		}
+		if user.Username == req.Username {
+			return nil, errors.New("username taken")
+		}
+	}
 
 	jsonGPR, err := json.Marshal(&api.GeneratePasswordRequest{
 		Username:  req.Username,
@@ -57,61 +71,26 @@ func (service *UserService) InsertUser(req *api.User) (*api.User, error) {
 		Password:  req.Password,
 	})
 	if err != nil {
-		service.logger.Error(
-			"something went wrong marshalling request",
-			zap.Any("req", req),
-			zap.Error(err))
+		service.logger.Error("something went wrong marshalling request", zap.Any("req", req), zap.Error(err))
 		return nil, err
 	}
 
-	// TODO: replace with some message broker
-	r, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/users/generate-password", bytes.NewReader(jsonGPR))
+	msg, err := service.Nats.Request(pkg.AuthGeneratePass, jsonGPR, 10*time.Second)
 	if err != nil {
-		service.logger.Error(
-			"something went wrong generating the password from auth service",
-			zap.Any("req", jsonGPR),
-			zap.Error(err))
-		return nil, err
-	}
-	r.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	response, err := client.Do(r)
-	if err != nil {
-		service.logger.Error(
-			"something went wrong generating the password from auth service",
-			zap.Any("req", jsonGPR),
-			zap.Error(err))
-		return nil, err
-	}
-
-	defer response.Body.Close()
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		service.logger.Error(
-			"something went wrong reading response from auth service",
-			zap.Any("response", body),
-			zap.Error(err))
+		service.logger.Error("couldn't get a response from auth service", zap.Any("req", jsonGPR), zap.Error(err))
 		return nil, err
 	}
 
 	var gpResponse api.GeneratePasswordResponse
 
-	if err = json.Unmarshal(body, &gpResponse); err != nil {
-		service.logger.Error(
-			"something went wrong unmarshalling response from auth service",
-			zap.Any("user", body),
-			zap.Error(err))
+	if err = json.Unmarshal(msg.Data, &gpResponse); err != nil {
+		service.logger.Error("something went wrong unmarshalling response from auth service", zap.Any("msg", msg), zap.Error(err))
 		return nil, err
 	}
 
 	if gpResponse.Password == "" {
 		err = errors.New("empty pass")
-		service.logger.Error(
-			"missing pass from response",
-			zap.Any("res", gpResponse),
-			zap.Error(err))
+		service.logger.Error("missing pass from response", zap.Any("res", gpResponse), zap.Error(err))
 		return nil, err
 	}
 
