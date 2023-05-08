@@ -18,10 +18,14 @@ jobs:
       with:
         go-version: 1.20
 
+    - uses: dominikh/staticcheck-action@v1.2.0
+      with:
+        version: "2022.1.1"
+
     - name: Install dependencies
       run: |
         go version
-        go install honnef.co/go/tools/cmd/staticcheck@latest
+        go mod tidy
 
       # Run build of the application
     - name: Run build
@@ -29,7 +33,6 @@ jobs:
 
       # Run vet & lint on the code
     - name: Run vet & lint
-      uses: dominikh/staticcheck-action@v1.2.0
       run: |
         go vet .
 
