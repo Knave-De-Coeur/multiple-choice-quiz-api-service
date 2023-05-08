@@ -18,23 +18,24 @@ jobs:
       with:
         go-version: 1.20
 
-    - uses: dominikh/staticcheck-action@v1.2.0
-      with:
-        version: "2022.1.1"
-
     - name: Install dependencies
       run: |
         go version
         go mod tidy
 
-      # Run build of the application
-    - name: Run build
-      run: go build ./...
-
       # Run vet & lint on the code
     - name: Run vet & lint
       run: |
         go vet .
+
+    - uses: dominikh/staticcheck-action@latest
+      with:
+        version: "2022.1.1"
+        install-go: false
+
+    # Run build of the application
+    - name: Run build
+      run: go build ./...
 
     - name: Test
       run: go test -v ./...
