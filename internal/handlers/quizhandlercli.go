@@ -7,8 +7,8 @@ package handlers
 // 	fmt.Println("Start creating your profile.")
 //
 // 	for {
-// 		fmt.Println("Enter Full Name: ")
-// 		newUser.Name, _ = reader.ReadString('\n')
+// 		fmt.Println("Enter Full FirstName: ")
+// 		newUser.FirstName, _ = reader.ReadString('\n')
 //
 // 		fmt.Println("Enter your age: ")
 // 		rawAge, _ := reader.ReadString('\n')
@@ -21,7 +21,7 @@ package handlers
 // 		fmt.Println("Enter a password: ")
 // 		newUser.Password, _ = reader.ReadString('\n')
 //
-// 		newUser.Name = strings.TrimSpace(newUser.Name)
+// 		newUser.FirstName = strings.TrimSpace(newUser.FirstName)
 // 		newUser.Username = strings.TrimSpace(newUser.Username)
 // 		newUser.Password = strings.TrimSpace(newUser.Password)
 //

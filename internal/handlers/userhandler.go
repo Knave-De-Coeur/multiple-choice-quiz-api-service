@@ -1,14 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
 
 	"quiz-api-service/internal/api"
@@ -16,12 +15,14 @@ import (
 )
 
 type UserHandler struct {
+	Nats        *nats.Conn
 	UserService services.UserServices
 	Validator   *validator.Validate
 }
 
-func NewUserHandler(service *services.UserService) *UserHandler {
+func NewUserHandler(service *services.UserService, nc *nats.Conn) *UserHandler {
 	return &UserHandler{
+		Nats:        nc,
 		UserService: service,
 		Validator:   validator.New(),
 	}
@@ -32,13 +33,12 @@ func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
 
 	r.POST("login", handler.login)
 
-	r.Group("users").
+	r.Group("user").
 		GET("", handler.getUsers).
-		GET("username/:username", handler.getUserByUsername).
 		GET("id/:uID", handler.getUserByID).
-		POST("new", handler.newUser)
+		POST("new", handler.newUser).
+		PUT("/:uID", handler.updateUser)
 
-	return
 }
 
 func (handler *UserHandler) getUsers(c *gin.Context) {
@@ -50,26 +50,7 @@ func (handler *UserHandler) getUsers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully grabbed all users", users, nil))
-	return
-}
 
-func (handler *UserHandler) getUserByUsername(c *gin.Context) {
-
-	username := c.Param("username")
-
-	if username == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("failed to get username from url", nil, fmt.Errorf("missing url")))
-		return
-	}
-
-	user, err := handler.UserService.GetUserByUsername(username)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get user by username", nil, err))
-		return
-	}
-
-	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
-	return
 }
 
 func (handler *UserHandler) getUserByID(c *gin.Context) {
@@ -92,44 +73,64 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
-	return
+
 }
 
 func (handler *UserHandler) newUser(c *gin.Context) {
 
-	var user api.User
+	var newUserReq api.NewUserRequest
 
-	if err := c.ShouldBindJSON(&user); err != nil {
+	if err := c.ShouldBindJSON(&newUserReq); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to parse new user request", nil, err))
 		return
 	}
 
-	if err := handler.Validator.Struct(user); err != nil {
+	if err := handler.Validator.Struct(newUserReq); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
 		return
 	}
 
-	if err := handler.UserService.InsertUser(&user); err != nil {
+	res, err := handler.UserService.InsertUser(newUserReq)
+	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
 		return
 	}
 
-	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
-	return
-}
+	c.JSON(http.StatusCreated, api.GenerateMessageResponse("successfully inserted user", res, nil))
 
-// HandleRequests sets up the server and the endpoints
-// func HandleRequests() {
-// 	myRouter := mux.NewRouter().StrictSlash(true)
-// 	myRouter.HandleFunc("/", homePage)
-// 	myRouter.HandleFunc("/new-player", addNewUser).Methods("POST")
-// 	myRouter.HandleFunc("/login", login).Methods("POST")
-// 	myRouter.HandleFunc("/logout", logout).Methods("POST")
-// 	// myRouter.HandleFunc("/submit-answer", submitAnswersAndGetResults).Methods("POST")
-// 	// myRouter.HandleFunc("/compare-your-score", compareUserScores).Methods("POST")
-// 	myRouter.HandleFunc("/players", showPlayers)
-// 	log.Fatal(http.ListenAndServe(":"+config.CurrentConfigs.Port, myRouter))
-// }
+}
+func (handler *UserHandler) updateUser(c *gin.Context) {
+
+	userID := c.Param("uID")
+	userIDint, err := strconv.Atoi(userID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("wrong id format in url", nil, err))
+		return
+	}
+
+	var updateUserReq api.UpdateUserRequest
+
+	if err = c.ShouldBindJSON(&updateUserReq); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to parse new user request", nil, err))
+		return
+	}
+
+	updateUserReq.ID = uint(userIDint)
+
+	if err = handler.Validator.Struct(updateUserReq); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
+		return
+	}
+
+	err = handler.UserService.UpdateUser(updateUserReq)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully updated user", nil, nil))
+
+}
 
 // Login endpoint function that checks username and password and sets user appropriately
 func (handler *UserHandler) login(c *gin.Context) {
@@ -150,30 +151,5 @@ func (handler *UserHandler) login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("login successful", user, nil))
-	return
-}
 
-// This is one of the endpoint functions that stores the users submitted answers, then
-// Sets the users score and response with a Response struct parsed into json
-func submitAnswersAndGetResults(res http.ResponseWriter, req *http.Request) {
-	reqBody, _ := ioutil.ReadAll(req.Body)
-
-	var submitAnswerRequest api.SubmitAnswersRequest
-	_ = json.Unmarshal(reqBody, &submitAnswerRequest)
-
-	// currentUser := searchUsersByID(submitAnswerRequest.UserID)
-	// currentUser.SubmittedAnswers = submitAnswerRequest.SubmittedAnswers
-	// currentUser.Score = 0
-
-	// for i := range ListOfQuestions {
-	// 	if ListOfQuestions[i].CorrectAnswer == currentUser.SubmittedAnswers[i] {
-	// 		currentUser.Score++
-	// 	}
-	// }
-
-	// updateUser(currentUser)
-
-	// message := "You have answered " + strconv.Itoa(currentUser.Score) + " out of " + strconv.Itoa(len(ListOfQuestions)) + " questions correctly!"
-
-	_ = json.NewEncoder(res).Encode(api.GenerateMessageResponse("", nil, nil))
 }

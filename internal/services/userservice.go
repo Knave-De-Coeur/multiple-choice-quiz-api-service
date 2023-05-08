@@ -1,19 +1,23 @@
 package services
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"quiz-api-service/internal/pkg"
 
 	"quiz-api-service/internal/api"
+	"quiz-api-service/internal/pkg"
 )
 
 type UserService struct {
 	DBConn   *gorm.DB
+	Nats     *nats.Conn
 	logger   *zap.Logger
 	settings UserServiceSettings
 }
@@ -25,15 +29,18 @@ type UserServiceSettings struct {
 }
 
 type UserServices interface {
-	InsertUser(user *api.User) error
+	InsertUser(user api.NewUserRequest) (*api.User, error)
+	UpdateUser(req api.UpdateUserRequest) error
+	checkDuplicatePasswords(currentPass string) error
 	GetUsers() ([]api.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
-	GetUserByID(uID uint) (*api.User, error)
+	GetUserByID(uID uint) (*pkg.User, error)
 	Login(request api.LoginRequest) (*api.User, error)
 }
 
-func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSettings) *UserService {
+func NewUserService(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger, settings UserServiceSettings) *UserService {
 	return &UserService{
+		Nats:     nc,
 		DBConn:   dbConn,
 		logger:   logger,
 		settings: settings,
@@ -41,24 +48,74 @@ func NewUserService(dbConn *gorm.DB, logger *zap.Logger, settings UserServiceSet
 }
 
 // InsertUser inserts new user in users table from data passed in arg.
-func (service *UserService) InsertUser(req *api.User) error {
+func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error) {
 
-	user := &pkg.User{
-		Name:     req.Name,
-		Username: req.Username,
-		Age:      req.Age,
-		Password: req.Password,
+	users, err := service.GetUsers()
+	if err != nil {
+		return nil, err
 	}
 
-	res := service.DBConn.Select("name", "age", "username", "password").Create(user)
+	for _, user := range users {
+		if user.Email == req.Email {
+			return nil, errors.New("email already registered")
+		}
+		if user.Username == req.Username {
+			return nil, errors.New("username taken")
+		}
+	}
+
+	jsonGPR, err := json.Marshal(&api.GeneratePasswordRequest{
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Age:       req.Age,
+		Email:     req.Email,
+		Password:  req.Password,
+	})
+	if err != nil {
+		service.logger.Error("something went wrong marshalling request", zap.Any("req", req), zap.Error(err))
+		return nil, err
+	}
+
+	msg, err := service.Nats.Request(pkg.AuthGeneratePass, jsonGPR, 10*time.Second)
+	if err != nil {
+		service.logger.Error("couldn't get a response from auth service", zap.Any("req", jsonGPR), zap.Error(err))
+		return nil, err
+	}
+
+	var gpResponse api.GeneratePasswordResponse
+
+	if err = json.Unmarshal(msg.Data, &gpResponse); err != nil {
+		service.logger.Error("something went wrong unmarshalling response from auth service", zap.Any("msg", msg), zap.Error(err))
+		return nil, err
+	}
+
+	if gpResponse.Password == "" {
+		err = errors.New("empty pass")
+		service.logger.Error("missing pass from response", zap.Any("res", gpResponse), zap.Error(err))
+		return nil, err
+	}
+
+	user := &pkg.User{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Username:  req.Username,
+		Email:     req.Email,
+		Age:       req.Age,
+		Password:  gpResponse.Password,
+	}
+
+	res := service.DBConn.
+		Select("first_name", "last_name", "email", "age", "username", "password").
+		Create(user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong inserting user", zap.Any("user", user), zap.Error(res.Error))
-		return res.Error
+		return nil, res.Error
 	}
 
 	service.logger.Debug("rows inserted", zap.Int64("rowsAffected", res.RowsAffected))
 
-	return nil
+	return req.User, nil
 }
 
 // GetUsers returns list of users in db.
@@ -67,7 +124,9 @@ func (service *UserService) GetUsers() ([]api.User, error) {
 	var users []api.User
 
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username", "created_at", "updated_at", "id").Find(&users)
+	res := service.DBConn.
+		Select("first_name", "last_name", "email", "age", "username", "created_at", "updated_at", "id").
+		Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
 		return nil, res.Error
@@ -84,7 +143,7 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 	var user pkg.User
 	// Get all records
 	res := service.DBConn.
-		Select("id", "name", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
+		Select("id", "first_name", "last_name", "email", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
 		Where("username = ?", username).
 		First(&user)
 	if res.Error != nil {
@@ -98,11 +157,14 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 }
 
 // GetUserByID grabs from table by id
-func (service *UserService) GetUserByID(uID uint) (*api.User, error) {
+func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
 
-	var user api.User
+	var user pkg.User
 	// Get all records
-	res := service.DBConn.Select("name", "age", "username", "password", "last_login_time_stamp").Where("id = ?", uID).First(&user)
+	res := service.DBConn.
+		Select("id", "first_name", "last_name", "email", "age", "username", "password", "last_login_time_stamp").
+		Where("id = ?", uID).
+		First(&user)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting player by ID", zap.Error(res.Error))
 		return nil, res.Error
@@ -141,7 +203,9 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 
 	return &api.User{
 		ID:                 strconv.Itoa(int(user.ID)),
-		Name:               user.Name,
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Email:              user.Email,
 		Username:           user.Username,
 		Age:                user.Age,
 		CreatedAT:          user.CreatedAt.Format(time.RFC3339),
@@ -150,61 +214,56 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 	}, nil
 }
 
-// Compare stats endpoint func that returns the message with how the user did compare to others
-// func compareUserScores(res http.ResponseWriter, req *http.Request) {
-// 	reqBody, _ := ioutil.ReadAll(req.Body)
-// 	var compareUsersRequest api.CompareUsersRequest
-// 	_ = json.Unmarshal(reqBody, &compareUsersRequest)
-//
-// 	user := searchUsersByID(compareUsersRequest.UserID)
-//
-// 	message := ""
-// 	errorFound := false
-// 	if len(user.SubmittedAnswers) < 1 {
-// 		message = "Start playing to compare results!"
-// 		errorFound = true
-// 	} else {
-// 		x := getUserComparisonScore(user)
-//
-// 		negative := math.Signbit(x)
-//
-// 		userScoreComparison := strconv.FormatFloat(x, 'f', 0, 64)
-//
-// 		if negative {
-// 			message = "You did " + userScoreComparison + "% worse than everyone!"
-// 		} else {
-// 			message = "You did " + userScoreComparison + "% better than everyone!"
-// 		}
-// 	}
-//
-// 	responseMessage := api.Response{
-// 		Message: message,
-// 		Error:   errorFound,
-// 	}
-//
-// 	_ = json.NewEncoder(res).Encode(responseMessage)
-// }
+func (service *UserService) checkDuplicatePasswords(currentPass string) error {
 
-// This calculates the comparison percentage the user has from other users
-// func getUserComparisonScore(currentUser pkg.User) float64 {
-//
-// 	var listOfScores []int
-//
-// 	var sumPercentages int
-//
-// 	for i := range ListOfUsers {
-// 		if ListOfUsers[i].ID != currentUser.ID {
-// 			scorePercentage := ListOfUsers[i].Score * 20
-// 			sumPercentages += scorePercentage
-// 			listOfScores = append(listOfScores, scorePercentage)
-// 		}
-// 	}
-//
-// 	averagePercentage := float64(sumPercentages) / (float64(len(listOfScores)))
-//
-// 	scorePercentage := float64(currentUser.Score * 20)
-//
-// 	x := scorePercentage - averagePercentage
-//
-// 	return x
-// }
+	res := service.DBConn.Select("password").Where("password = ?", currentPass)
+
+	if res.Error != nil && res.Error != gorm.ErrRecordNotFound {
+		service.logger.Error("something went wrong getting password", zap.Error(res.Error), zap.String("password", currentPass))
+		return res.Error
+	}
+
+	return nil
+}
+
+func (service *UserService) UpdateUser(req api.UpdateUserRequest) error {
+
+	user, err := service.GetUserByID(req.ID)
+	if err != nil {
+		return err
+	}
+
+	// TODO: handle this validation better
+	if user.Password != req.OldPassword {
+		return fmt.Errorf("invalid passord for user")
+	}
+
+	if err = service.checkDuplicatePasswords(req.NewPassword); err != nil {
+		service.logger.Error("password is taken", zap.Error(err), zap.String("password", req.NewPassword))
+		return err
+	}
+
+	unixCT := service.DBConn.NowFunc()
+
+	fieldDataMap := map[string]interface{}{
+		"first_name": req.FirstName,
+		"last_name":  req.LastName,
+		"username":   req.Username,
+		"email":      req.Email,
+		"age":        req.Age,
+		"password":   req.NewPassword,
+		"updated_at": unixCT,
+	}
+
+	// update record with login timestamp
+	res := service.DBConn.
+		Table("users").
+		Where("id = ?", user.ID).
+		Updates(fieldDataMap)
+	if res.Error != nil {
+		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
+		return res.Error
+	}
+
+	return nil
+}
