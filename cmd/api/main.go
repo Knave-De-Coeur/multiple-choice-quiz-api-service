@@ -1,18 +1,3 @@
-/*
-Copyright © 2020 NAME HERE <alexanderm1496@gmail.com>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package main
 
 import (
@@ -38,15 +23,13 @@ func main() {
 	}
 
 	defer func(logger *zap.Logger) {
-		_ = logger.Sync()
-		// if err != nil {
-		// 	fmt.Printf("something went wrong deferring the close to the logger: %v", err)
-		// }
+		err = logger.Sync()
+		panic(fmt.Sprintf("something went wrong with logger %w", err))
 	}(logger)
 
 	logger.Info("🚀 connecting to db")
 
-	quizDBConn, err := utils.SetUpDBConnection(
+	dbConnection, err := utils.SetUpDBConnection(
 		config.CurrentConfigs.DBUser,
 		config.CurrentConfigs.DBPassword,
 		config.CurrentConfigs.Host,
@@ -57,15 +40,15 @@ func main() {
 		logger.Fatal("exiting application...", zap.Error(err))
 	}
 
-	logger.Info(fmt.Sprintf("✅ Setup connection to %s db.", quizDBConn.Migrator().CurrentDatabase()))
+	logger.Info(fmt.Sprintf("✅ Setup connection to %s db.", dbConnection.Migrator().CurrentDatabase()))
 
 	logger.Info("🚀 Running migrations")
 
-	if err = utils.SetUpSchema(quizDBConn, logger); err != nil {
+	if err = utils.SetUpSchema(dbConnection, logger); err != nil {
 		logger.Fatal(err.Error())
 	}
 
-	db, err := quizDBConn.DB()
+	db, err := dbConnection.DB()
 	if err != nil {
 		logger.Fatal("something went wrong getting the database conn from gorm", zap.Error(err))
 	}
@@ -74,7 +57,7 @@ func main() {
 		logger.Fatal(err.Error())
 	}
 
-	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", quizDBConn.Migrator().CurrentDatabase()))
+	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", dbConnection.Migrator().CurrentDatabase()))
 
 	// Connect to a server
 	// nc, err := nats.Connect("nats://127.0.0.1:4222")
@@ -85,7 +68,7 @@ func main() {
 
 	defer nc.Drain()
 
-	routes, err := setUpRoutes(quizDBConn, nc, logger)
+	routes, err := setUpRoutes(dbConnection, nc, logger)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
@@ -96,7 +79,7 @@ func main() {
 }
 
 // setUpRoutes adds routes and returns gin engine
-func setUpRoutes(quizDBConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engine, error) {
+func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engine, error) {
 
 	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
 	if err != nil {
@@ -104,12 +87,12 @@ func setUpRoutes(quizDBConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.E
 		return nil, err
 	}
 
-	userService := services.NewUserService(quizDBConn, nc, logger, services.UserServiceSettings{
+	userService := services.NewUserService(dbConn, nc, logger, services.UserServiceSettings{
 		Port:     portNum,
 		Hostname: config.CurrentConfigs.Host,
 	})
 
-	gameService := services.NewGameService(quizDBConn, logger, services.GameServiceSettings{
+	gameService := services.NewGameService(dbConn, logger, services.GameServiceSettings{
 		Port:     portNum,
 		Hostname: config.CurrentConfigs.Host,
 	})
@@ -125,8 +108,8 @@ func setUpRoutes(quizDBConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.E
 		})
 	})
 
-	handlers.NewUserHandler(userService, nc).UserRoutes(r.Group("/"))
-	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/"))
+	handlers.NewUserHandler(userService, nc).UserRoutes(r.Group("/api/v1"))
+	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/api/v1"))
 
 	return r, nil
 }
