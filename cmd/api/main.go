@@ -24,7 +24,7 @@ func main() {
 
 	defer func(logger *zap.Logger) {
 		err = logger.Sync()
-		panic(fmt.Sprintf("something went wrong with logger %w", err))
+		panic(fmt.Sprintf("something went wrong with logger %v", err))
 	}(logger)
 
 	logger.Info("🚀 connecting to db")
