@@ -39,7 +39,6 @@ func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
 		POST("new", handler.newUser).
 		PUT("/:uID", handler.updateUser)
 
-	return
 }
 
 func (handler *UserHandler) getUsers(c *gin.Context) {
@@ -51,7 +50,7 @@ func (handler *UserHandler) getUsers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully grabbed all users", users, nil))
-	return
+
 }
 
 func (handler *UserHandler) getUserByID(c *gin.Context) {
@@ -74,7 +73,7 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully got user", user, nil))
-	return
+
 }
 
 func (handler *UserHandler) newUser(c *gin.Context) {
@@ -98,12 +97,16 @@ func (handler *UserHandler) newUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, api.GenerateMessageResponse("successfully inserted user", res, nil))
-	return
+
 }
 func (handler *UserHandler) updateUser(c *gin.Context) {
 
 	userID := c.Param("uID")
 	userIDint, err := strconv.Atoi(userID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("wrong id format in url", nil, err))
+		return
+	}
 
 	var updateUserReq api.UpdateUserRequest
 
@@ -126,7 +129,7 @@ func (handler *UserHandler) updateUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully updated user", nil, nil))
-	return
+
 }
 
 // Login endpoint function that checks username and password and sets user appropriately
@@ -148,5 +151,5 @@ func (handler *UserHandler) login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("login successful", user, nil))
-	return
+
 }

@@ -21,15 +21,12 @@ func NewGameHandler(service *services.GameService) *GameHandler {
 	}
 }
 
-// UserRoutes sets up user routes with accompanying methods for processing
+// GameRoutes sets up user routes with accompanying methods for processing
 func (handler *GameHandler) GameRoutes(r *gin.RouterGroup) {
 
 	r.Group("game").
 		POST("start", handler.startGame)
-	// POST("submit", handler.newUser).
-	// POST("finish", handler.newUser)
 
-	return
 }
 
 func (handler *GameHandler) startGame(c *gin.Context) {
@@ -48,5 +45,4 @@ func (handler *GameHandler) startGame(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully grabbed all users", game, nil))
-	return
 }
