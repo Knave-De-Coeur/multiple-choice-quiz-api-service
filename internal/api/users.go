@@ -29,5 +29,6 @@ type UpdateUserRequest struct {
 }
 
 type DeleteUserRequest struct {
-	ID uint `json:"ID" validate:"gt=0"`
+	ID         uint `json:"ID" validate:"gt=0"`
+	HardDelete bool `json:"hard_delete,omitempty"`
 }

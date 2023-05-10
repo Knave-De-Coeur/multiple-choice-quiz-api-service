@@ -31,6 +31,7 @@ type UserServiceSettings struct {
 type UserServices interface {
 	InsertUser(user api.NewUserRequest) (*api.User, error)
 	UpdateUser(req api.UpdateUserRequest) error
+	DeleteUser(req api.DeleteUserRequest) error
 	checkDuplicatePasswords(currentPass string) error
 	GetUsers() ([]api.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
@@ -262,6 +263,27 @@ func (service *UserService) UpdateUser(req api.UpdateUserRequest) error {
 		Updates(fieldDataMap)
 	if res.Error != nil {
 		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
+		return res.Error
+	}
+
+	return nil
+}
+
+func (service *UserService) DeleteUser(req api.DeleteUserRequest) error {
+
+	var tx *gorm.DB
+
+	if req.HardDelete {
+		tx = service.DBConn.Unscoped()
+	} else {
+		// updates record with deleted_at timestamp
+		tx = service.DBConn
+	}
+
+	res := tx.Table("users").Where("id = ?", req.ID).Delete(&pkg.User{Model: gorm.Model{ID: req.ID}})
+
+	if res.Error != nil {
+		service.logger.Error("something went wrong deleting a user", zap.Error(res.Error))
 		return res.Error
 	}
 

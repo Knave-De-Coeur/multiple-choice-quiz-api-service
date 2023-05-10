@@ -37,7 +37,8 @@ func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
 		GET("", handler.getUsers).
 		GET("id/:uID", handler.getUserByID).
 		POST("new", handler.newUser).
-		PUT("/:uID", handler.updateUser)
+		PUT("/:uID", handler.updateUser).
+		DELETE("/:uID", handler.deleteUser)
 
 }
 
@@ -124,12 +125,56 @@ func (handler *UserHandler) updateUser(c *gin.Context) {
 
 	err = handler.UserService.UpdateUser(updateUserReq)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
+		var status int
+		if err == gorm.ErrRecordNotFound {
+			status = http.StatusNotModified
+		} else {
+			status = http.StatusInternalServerError
+		}
+		c.AbortWithStatusJSON(status, api.GenerateMessageResponse("failed to update user", nil, err))
 		return
 	}
 
 	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully updated user", nil, nil))
 
+}
+
+func (handler *UserHandler) deleteUser(c *gin.Context) {
+
+	userID := c.Param("uID")
+	userIDint, err := strconv.Atoi(userID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("wrong id format in url", nil, err))
+		return
+	}
+
+	var deleteUserReq api.DeleteUserRequest
+
+	if err = c.ShouldBindJSON(&deleteUserReq); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to parse new user request", nil, err))
+		return
+	}
+
+	deleteUserReq.ID = uint(userIDint)
+
+	if err = handler.Validator.Struct(deleteUserReq); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
+		return
+	}
+
+	err = handler.UserService.DeleteUser(deleteUserReq)
+	if err != nil {
+		var status int
+		if err == gorm.ErrRecordNotFound {
+			status = http.StatusNotModified
+		} else {
+			status = http.StatusInternalServerError
+		}
+		c.AbortWithStatusJSON(status, api.GenerateMessageResponse("failed to delete user", nil, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, api.GenerateMessageResponse("successfully deleted user", nil, nil))
 }
 
 // Login endpoint function that checks username and password and sets user appropriately
