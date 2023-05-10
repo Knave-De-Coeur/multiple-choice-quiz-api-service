@@ -108,7 +108,7 @@ func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engin
 		})
 	})
 
-	handlers.NewUserHandler(userService, nc).UserRoutes(r.Group("/api/v1"))
+	handlers.NewUserHandler(userService, nc).SetUpRoutes(r.Group("/api/v1"))
 	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/api/v1"))
 
 	return r, nil
