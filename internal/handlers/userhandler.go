@@ -28,8 +28,8 @@ func NewUserHandler(service *services.UserService, nc *nats.Conn) *UserHandler {
 	}
 }
 
-// UserRoutes sets up user routes with accompanying methods for processing
-func (handler *UserHandler) UserRoutes(r *gin.RouterGroup) {
+// SetUpRoutes sets up user routes with accompanying methods for processing
+func (handler *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 
 	r.POST("login", handler.login)
 
