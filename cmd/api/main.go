@@ -59,14 +59,21 @@ func main() {
 
 	logger.Info(fmt.Sprintf("✅ Applied migrations to %s db.", dbConnection.Migrator().CurrentDatabase()))
 
-	// Connect to a server
-	// nc, err := nats.Connect("nats://127.0.0.1:4222")
-	nc, err := nats.Connect(nats.DefaultURL)
-	if err != nil {
-		logger.Fatal(fmt.Sprintf("❌ Failed to set up nats %s", err.Error()))
-	}
+	var nc *nats.Conn
 
-	defer nc.Drain()
+	if config.CurrentConfigs.NatsURL != "" {
+		logger.Info("🚀 Setting up nats connection.")
+		// Connect to a server
+		// nc, err := nats.Connect("nats://127.0.0.1:4222")
+		nc, err = nats.Connect(config.CurrentConfigs.NatsURL)
+		if err != nil {
+			logger.Fatal(fmt.Sprintf("❌ Failed to set up nats %s", err.Error()))
+		}
+
+		logger.Info("✅ Connected to nats!")
+
+		defer nc.Drain()
+	}
 
 	routes, err := setUpRoutes(dbConnection, nc, logger)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"user-api-service/internal/utils"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -33,7 +34,7 @@ type UserServices interface {
 	UpdateUser(req api.UpdateUserRequest) error
 	DeleteUser(req api.DeleteUserRequest) error
 	checkDuplicatePasswords(currentPass string) error
-	GetUsers() ([]api.User, error)
+	GetBasicUserDataList() ([]api.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
 	GetUserByID(uID uint) (*pkg.User, error)
 	Login(request api.LoginRequest) (*api.User, error)
@@ -51,7 +52,7 @@ func NewUserService(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger, settings
 // InsertUser inserts new user in users table from data passed in arg.
 func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error) {
 
-	users, err := service.GetUsers()
+	users, err := service.GetBasicUserDataList()
 	if err != nil {
 		return nil, err
 	}
@@ -65,36 +66,46 @@ func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error
 		}
 	}
 
-	jsonGPR, err := json.Marshal(&api.GeneratePasswordRequest{
-		Username:  req.Username,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Age:       req.Age,
-		Email:     req.Email,
-		Password:  req.Password,
-	})
-	if err != nil {
-		service.logger.Error("something went wrong marshalling request", zap.Any("req", req), zap.Error(err))
-		return nil, err
-	}
+	var encryptedPass string
 
-	msg, err := service.Nats.Request(pkg.AuthGeneratePass, jsonGPR, 10*time.Second)
-	if err != nil {
-		service.logger.Error("couldn't get a response from auth service", zap.Any("req", jsonGPR), zap.Error(err))
-		return nil, err
-	}
+	if service.Nats != nil {
+		jsonGPR, err := json.Marshal(&api.GeneratePasswordRequest{
+			Username:  req.Username,
+			FirstName: req.FirstName,
+			LastName:  req.LastName,
+			Age:       req.Age,
+			Email:     req.Email,
+			Password:  req.Password,
+		})
+		if err != nil {
+			service.logger.Error("something went wrong marshalling request", zap.Any("req", req), zap.Error(err))
+			return nil, err
+		}
 
-	var gpResponse api.GeneratePasswordResponse
+		msg, err := service.Nats.Request(pkg.AuthGeneratePass, jsonGPR, 10*time.Second)
+		if err != nil {
+			service.logger.Error("couldn't get a response from auth service", zap.Any("req", jsonGPR), zap.Error(err))
+			return nil, err
+		}
 
-	if err = json.Unmarshal(msg.Data, &gpResponse); err != nil {
-		service.logger.Error("something went wrong unmarshalling response from auth service", zap.Any("msg", msg), zap.Error(err))
-		return nil, err
-	}
+		var gpResponse api.GeneratePasswordResponse
 
-	if gpResponse.Password == "" {
-		err = errors.New("empty pass")
-		service.logger.Error("missing pass from response", zap.Any("res", gpResponse), zap.Error(err))
-		return nil, err
+		if err = json.Unmarshal(msg.Data, &gpResponse); err != nil {
+			service.logger.Error("something went wrong unmarshalling response from auth service", zap.Any("msg", msg), zap.Error(err))
+			return nil, err
+		}
+
+		if gpResponse.Password == "" {
+			err = errors.New("empty pass")
+			service.logger.Error("missing pass from response", zap.Any("res", gpResponse), zap.Error(err))
+			return nil, err
+		}
+	} else {
+		encryptedPass, err = utils.HashAndSalt([]byte(req.Password))
+		if err != nil {
+			service.logger.Error("failed to encrypt pass", zap.Any("request", req), zap.Error(err))
+			return nil, err
+		}
 	}
 
 	user := &pkg.User{
@@ -103,7 +114,7 @@ func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error
 		Username:  req.Username,
 		Email:     req.Email,
 		Age:       req.Age,
-		Password:  gpResponse.Password,
+		Password:  encryptedPass,
 	}
 
 	res := service.DBConn.
@@ -116,17 +127,19 @@ func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error
 
 	service.logger.Debug("rows inserted", zap.Int64("rowsAffected", res.RowsAffected))
 
+	req.User.ID = strconv.Itoa(int(user.ID))
+
 	return req.User, nil
 }
 
 // GetUsers returns list of users in db.
-func (service *UserService) GetUsers() ([]api.User, error) {
+func (service *UserService) GetBasicUserDataList() ([]api.User, error) {
 
 	var users []api.User
 
 	// Get all records
 	res := service.DBConn.
-		Select("first_name", "last_name", "email", "age", "username", "created_at", "updated_at", "id").
+		Select("id", "first_name", "last_name", "email", "age", "username").
 		Find(&users)
 	if res.Error != nil {
 		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))

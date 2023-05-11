@@ -33,10 +33,11 @@ func (handler *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 
 	r.POST("login", handler.login)
 
+	r.GET("users", handler.getUsers)
+
 	r.Group("user").
-		GET("", handler.getUsers).
 		GET("id/:uID", handler.getUserByID).
-		POST("new", handler.newUser).
+		POST("", handler.newUser).
 		PUT("/:uID", handler.updateUser).
 		DELETE("/:uID", handler.deleteUser)
 
@@ -44,7 +45,7 @@ func (handler *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 
 func (handler *UserHandler) getUsers(c *gin.Context) {
 
-	users, err := handler.UserService.GetUsers()
+	users, err := handler.UserService.GetBasicUserDataList()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get users", nil, err))
 		return
