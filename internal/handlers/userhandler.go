@@ -36,8 +36,8 @@ func (handler *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 	r.GET("users", handler.getUsers)
 
 	r.Group("user").
-		GET("id/:uID", handler.getUserByID).
 		POST("", handler.newUser).
+		GET("/:uID", handler.getUserByID).
 		PUT("/:uID", handler.updateUser).
 		DELETE("/:uID", handler.deleteUser)
 
