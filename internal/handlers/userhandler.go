@@ -10,8 +10,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
 
-	"quiz-api-service/internal/api"
-	"quiz-api-service/internal/services"
+	"user-api-service/internal/api"
+	"user-api-service/internal/services"
 )
 
 type UserHandler struct {
@@ -100,6 +100,7 @@ func (handler *UserHandler) newUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, api.GenerateMessageResponse("successfully inserted user", res, nil))
 
 }
+
 func (handler *UserHandler) updateUser(c *gin.Context) {
 
 	userID := c.Param("uID")

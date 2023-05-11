@@ -1,2 +1,0 @@
-TRUNCATE TABLE questions;
-TRUNCATE TABLE games;

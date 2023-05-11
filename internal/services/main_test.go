@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"quiz-api-service/internal/config"
-	"quiz-api-service/internal/utils"
+	"user-api-service/internal/config"
+	"user-api-service/internal/utils"
 )
 
 var (

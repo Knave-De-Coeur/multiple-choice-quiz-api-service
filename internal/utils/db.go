@@ -13,8 +13,8 @@ import (
 	gormMysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"quiz-api-service/internal/config"
-	"quiz-api-service/internal/pkg"
+	"user-api-service/internal/config"
+	"user-api-service/internal/pkg"
 )
 
 // GetDBConnectionString uses configs to generate a connection string to the db
@@ -77,11 +77,6 @@ func SetUpSchema(db *gorm.DB, logger *zap.Logger) (err error) {
 	// set up schema
 	err = db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
 		&pkg.User{},
-		&pkg.UserGames{},
-		&pkg.Game{},
-		&pkg.Question{},
-		&pkg.Answer{},
-		&pkg.UserAnswers{},
 	)
 	if err != nil {
 		logger.Error("something went wrong migrating schema", zap.Error(err))
@@ -94,7 +89,8 @@ func SetUpSchema(db *gorm.DB, logger *zap.Logger) (err error) {
 func RunUpMigrations(db *sql.DB, logger *zap.Logger) (err error) {
 
 	driver, _ := migrateMysql.WithInstance(db, &migrateMysql.Config{})
-	m, err := migrate.NewWithDatabaseInstance("file://internal/migrations", "sql", driver)
+	fileLocation := fmt.Sprintf("file://%s", config.CurrentConfigs.MigrationsDir)
+	m, err := migrate.NewWithDatabaseInstance(fileLocation, "sql", driver)
 	if err != nil {
 		logger.Error("❌ failed to get migration instance", zap.Error(err))
 		return err

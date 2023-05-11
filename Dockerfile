@@ -1,21 +1,19 @@
-# syntax=docker/dockerfile:1
+FROM golang:1.20.1-alpine3.17 AS build-env
 
-##
-## Build
-##
-FROM golang:1.17.5-alpine3.15 AS build-env
+ENV GOPATH=/go
 
-COPY ./ /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/
+WORKDIR $GOPATH/src/github.com/knave-de-coeur/user-api-service/
 
-WORKDIR /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/
+COPY . $GOPATH/src/github.com/knave-de-coeur/user-api-service/
+
 
 # Download necessary Go modules
 RUN go mod download
 
 ENV GO111MODULE=on
 
-RUN go build -o /go/bin/ /go/src/github.com/knave-de-coeur/multiple-choice-quize-api-service/cmd/api
+RUN go build -o /go/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api
 
-EXPOSE 9990
+EXPOSE 8080
 
-ENTRYPOINT ["/go/bin/api"]
+ENTRYPOINT ["$GOPATH/bin/user-api"]

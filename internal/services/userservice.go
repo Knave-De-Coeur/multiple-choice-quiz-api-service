@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"quiz-api-service/internal/api"
-	"quiz-api-service/internal/pkg"
+	"user-api-service/internal/api"
+	"user-api-service/internal/pkg"
 )
 
 type UserService struct {

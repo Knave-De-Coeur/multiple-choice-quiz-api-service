@@ -1,4 +1,4 @@
-module quiz-api-service
+module user-api-service
 
 go 1.20
 
@@ -10,8 +10,6 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.15.1
 	github.com/magiconair/properties v1.8.5
 	github.com/nats-io/nats.go v1.24.0
-	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.9.0
 	go.uber.org/zap v1.19.1
 	gorm.io/driver/mysql v1.2.2
@@ -27,7 +25,6 @@ require (
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

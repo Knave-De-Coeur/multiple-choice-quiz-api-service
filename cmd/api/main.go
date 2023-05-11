@@ -9,10 +9,10 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"quiz-api-service/internal/config"
-	"quiz-api-service/internal/handlers"
-	"quiz-api-service/internal/services"
-	"quiz-api-service/internal/utils"
+	"user-api-service/internal/config"
+	"user-api-service/internal/handlers"
+	"user-api-service/internal/services"
+	"user-api-service/internal/utils"
 )
 
 func main() {
@@ -92,11 +92,6 @@ func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engin
 		Hostname: config.CurrentConfigs.Host,
 	})
 
-	gameService := services.NewGameService(dbConn, logger, services.GameServiceSettings{
-		Port:     portNum,
-		Hostname: config.CurrentConfigs.Host,
-	})
-
 	r := gin.New()
 
 	r.Use(gin.Logger())
@@ -109,7 +104,6 @@ func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engin
 	})
 
 	handlers.NewUserHandler(userService, nc).SetUpRoutes(r.Group("/api/v1"))
-	handlers.NewGameHandler(gameService).GameRoutes(r.Group("/api/v1"))
 
 	return r, nil
 }
