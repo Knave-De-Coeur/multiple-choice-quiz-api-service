@@ -8,6 +8,10 @@ type GeneratePasswordResponse struct {
 	Password  string `json:"password" validate:"required"`
 }
 
+type LoginResponse struct {
+	Token string
+}
+
 // MessageResponse is a generic response struct that'll be marshalled to json and sent to the requester
 type MessageResponse struct {
 	Message string `json:"message"`

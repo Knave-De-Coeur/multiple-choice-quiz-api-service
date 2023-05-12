@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"strconv"
 	"time"
 	"user-api-service/internal/utils"
@@ -25,8 +26,9 @@ type UserService struct {
 
 // UserServiceSettings used to affect code flow
 type UserServiceSettings struct {
-	Port     int
-	Hostname string
+	Port      int
+	Hostname  string
+	JWTSecret string
 }
 
 type UserServices interface {
@@ -36,8 +38,9 @@ type UserServices interface {
 	checkDuplicatePasswords(currentPass string) error
 	GetBasicUserDataList() ([]api.User, error)
 	GetUserByUsername(username string) (*pkg.User, error)
-	GetUserByID(uID uint) (*pkg.User, error)
-	Login(request api.LoginRequest) (*api.User, error)
+	GetUserByID(uID uint) (*api.User, error)
+	Login(request api.LoginRequest) (*api.LoginResponse, error)
+	getDBUserByID(uID uint) (*pkg.User, error)
 }
 
 func NewUserService(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger, settings UserServiceSettings) *UserService {
@@ -132,7 +135,6 @@ func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error
 	return req.User, nil
 }
 
-// GetUsers returns list of users in db.
 func (service *UserService) GetBasicUserDataList() ([]api.User, error) {
 
 	var users []api.User
@@ -142,7 +144,7 @@ func (service *UserService) GetBasicUserDataList() ([]api.User, error) {
 		Select("id", "first_name", "last_name", "email", "age", "username").
 		Find(&users)
 	if res.Error != nil {
-		service.logger.Error("something went wrong getting all players", zap.Error(res.Error))
+		service.logger.Error("something went wrong getting all users", zap.Error(res.Error))
 		return nil, res.Error
 	}
 
@@ -161,7 +163,25 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 		Where("username = ?", username).
 		First(&user)
 	if res.Error != nil {
-		service.logger.Error("something went wrong getting player by username", zap.Error(res.Error), zap.String("username", username))
+		service.logger.Error("something went wrong getting user by username", zap.Error(res.Error), zap.String("username", username))
+		return nil, res.Error
+	}
+
+	service.logger.Debug("user grabbed", zap.Any("user", user))
+
+	return &user, nil
+}
+
+func (service *UserService) getDBUserByID(uID uint) (*pkg.User, error) {
+
+	var user pkg.User
+	// Get all records
+	res := service.DBConn.
+		Select("id", "first_name", "last_name", "email", "age", "username", "password", "created_at", "updated_at", "last_login_time_stamp").
+		Where("id = ?", uID).
+		First(&user)
+	if res.Error != nil {
+		service.logger.Error("something went wrong getting user by ID", zap.Error(res.Error))
 		return nil, res.Error
 	}
 
@@ -171,39 +191,61 @@ func (service *UserService) GetUserByUsername(username string) (*pkg.User, error
 }
 
 // GetUserByID grabs from table by id
-func (service *UserService) GetUserByID(uID uint) (*pkg.User, error) {
+func (service *UserService) GetUserByID(uID uint) (*api.User, error) {
 
-	var user pkg.User
-	// Get all records
-	res := service.DBConn.
-		Select("id", "first_name", "last_name", "email", "age", "username", "password", "last_login_time_stamp").
-		Where("id = ?", uID).
-		First(&user)
-	if res.Error != nil {
-		service.logger.Error("something went wrong getting player by ID", zap.Error(res.Error))
-		return nil, res.Error
+	user, err := service.getDBUserByID(uID)
+	if err != nil {
+		return nil, err
 	}
 
-	service.logger.Debug("user grabbed", zap.Any("user", user))
+	response := &api.User{
+		ID:                 strconv.Itoa(int(user.ID)),
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Age:                user.Age,
+		Email:              user.Email,
+		Username:           user.Username,
+		CreatedAT:          user.CreatedAt.Format(time.RFC3339),
+		UpdatedAT:          user.UpdatedAt.Format(time.RFC3339),
+		LastLoginTimeStamp: user.LastLoginTimeStamp.Time.Format(time.RFC3339),
+	}
 
-	return &user, nil
+	return response, nil
 }
 
 // Login is a wrapper for the GetUserByUsername that also validates the password
-func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
+func (service *UserService) Login(request api.LoginRequest) (*api.LoginResponse, error) {
 
 	user, err := service.GetUserByUsername(request.Username)
 	if err != nil {
 		return nil, err
 	}
 
-	if user.Password != request.Password {
-		return nil, fmt.Errorf("invalid passord for user")
+	isSame, err := utils.ComparePasswords(user.Password, []byte(request.Password))
+	if err != nil {
+		service.logger.Error("something went wrong comparing the passwords", zap.Error(err))
+		return nil, err
+	} else if !isSame {
+		service.logger.Error("passwords don't match", zap.Any("req pass", request.Password))
+		return nil, fmt.Errorf("passwords don't match")
+	}
+
+	// save userID in jwt token for requests
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": user.ID,
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	// Sign and get the complete encoded token as a string using the secret
+	tokenString, err := token.SignedString([]byte(service.settings.JWTSecret))
+	if err != nil {
+		service.logger.Error("failed to create token", zap.Error(err))
+		return nil, err
 	}
 
 	unixCT := service.DBConn.NowFunc()
 
-	fieldsToUpdate := map[string]interface{}{"last_login_time_stamp": unixCT, "updated_at": unixCT}
+	fieldsToUpdate := map[string]interface{}{"last_login_time_stamp": unixCT}
 
 	// update record with login timestamp
 	res := service.DBConn.
@@ -211,20 +253,12 @@ func (service *UserService) Login(request api.LoginRequest) (*api.User, error) {
 		Where("id = ?", user.ID).
 		Updates(fieldsToUpdate)
 	if res.Error != nil {
-		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
+		service.logger.Error("something went wrong updating a user", zap.Error(res.Error))
 		return nil, res.Error
 	}
 
-	return &api.User{
-		ID:                 strconv.Itoa(int(user.ID)),
-		FirstName:          user.FirstName,
-		LastName:           user.LastName,
-		Email:              user.Email,
-		Username:           user.Username,
-		Age:                user.Age,
-		CreatedAT:          user.CreatedAt.Format(time.RFC3339),
-		UpdatedAT:          user.UpdatedAt.Format(time.RFC3339),
-		LastLoginTimeStamp: user.LastLoginTimeStamp.Time.Format(time.RFC3339),
+	return &api.LoginResponse{
+		Token: tokenString,
 	}, nil
 }
 
@@ -242,22 +276,10 @@ func (service *UserService) checkDuplicatePasswords(currentPass string) error {
 
 func (service *UserService) UpdateUser(req api.UpdateUserRequest) error {
 
-	user, err := service.GetUserByID(req.ID)
+	user, err := service.getDBUserByID(req.ID)
 	if err != nil {
 		return err
 	}
-
-	// TODO: handle this validation better
-	if user.Password != req.OldPassword {
-		return fmt.Errorf("invalid passord for user")
-	}
-
-	if err = service.checkDuplicatePasswords(req.NewPassword); err != nil {
-		service.logger.Error("password is taken", zap.Error(err), zap.String("password", req.NewPassword))
-		return err
-	}
-
-	unixCT := service.DBConn.NowFunc()
 
 	fieldDataMap := map[string]interface{}{
 		"first_name": req.FirstName,
@@ -265,8 +287,31 @@ func (service *UserService) UpdateUser(req api.UpdateUserRequest) error {
 		"username":   req.Username,
 		"email":      req.Email,
 		"age":        req.Age,
-		"password":   req.NewPassword,
-		"updated_at": unixCT,
+	}
+
+	if req.OldPassword != "" && req.NewPassword != "" {
+
+		isSame, err := utils.ComparePasswords(user.Password, []byte(req.OldPassword))
+		if err != nil {
+			service.logger.Error("something went wrong comparing the passwords", zap.Error(err))
+			return err
+		} else if !isSame {
+			service.logger.Error("passwords don't match", zap.Any("req pass", req.OldPassword))
+			return fmt.Errorf("passwords don't match")
+		}
+
+		if err = service.checkDuplicatePasswords(req.NewPassword); err != nil {
+			service.logger.Error("password is taken", zap.Error(err), zap.String("password", req.NewPassword))
+			return err
+		}
+
+		encryptedPass, err := utils.HashAndSalt([]byte(req.NewPassword))
+		if err != nil {
+			service.logger.Error("something went wrong encrypting the new password", zap.Error(err))
+			return err
+		}
+
+		fieldDataMap["password"] = encryptedPass
 	}
 
 	// update record with login timestamp
@@ -275,7 +320,7 @@ func (service *UserService) UpdateUser(req api.UpdateUserRequest) error {
 		Where("id = ?", user.ID).
 		Updates(fieldDataMap)
 	if res.Error != nil {
-		service.logger.Error("something went wrong updating a player", zap.Error(res.Error))
+		service.logger.Error("something went wrong updating a user", zap.Error(res.Error))
 		return res.Error
 	}
 

@@ -24,8 +24,8 @@ type UpdateUserRequest struct {
 	Email       string `json:"email" validate:"required,email"`
 	Age         int8   `json:"age" validate:"required"`
 	Username    string `json:"username" validate:"required"`
-	OldPassword string `json:"old_password" validate:"required"`
-	NewPassword string `json:"new_password" validate:"required"`
+	OldPassword string `json:"old_password,omitempty"`
+	NewPassword string `json:"new_password,omitempty"`
 }
 
 type DeleteUserRequest struct {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"user-api-service/internal/config"
 	"user-api-service/internal/handlers"
+	"user-api-service/internal/middleware"
 	"user-api-service/internal/services"
 	"user-api-service/internal/utils"
 )
@@ -75,7 +77,13 @@ func main() {
 		defer nc.Drain()
 	}
 
-	routes, err := setUpRoutes(dbConnection, nc, logger)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     config.CurrentConfigs.RedisAddress,
+		Password: config.CurrentConfigs.RedisPassword,
+		DB:       config.CurrentConfigs.RedisDB,
+	})
+
+	routes, err := setUpRoutes(dbConnection, redisClient, nc, logger)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
@@ -86,7 +94,7 @@ func main() {
 }
 
 // setUpRoutes adds routes and returns gin engine
-func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engine, error) {
+func setUpRoutes(dbConn *gorm.DB, redisClient *redis.Client, nc *nats.Conn, logger *zap.Logger) (*gin.Engine, error) {
 
 	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
 	if err != nil {
@@ -95,8 +103,9 @@ func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engin
 	}
 
 	userService := services.NewUserService(dbConn, nc, logger, services.UserServiceSettings{
-		Port:     portNum,
-		Hostname: config.CurrentConfigs.Host,
+		Port:      portNum,
+		Hostname:  config.CurrentConfigs.Host,
+		JWTSecret: config.CurrentConfigs.JWTSecret,
 	})
 
 	r := gin.New()
@@ -110,7 +119,9 @@ func setUpRoutes(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger) (*gin.Engin
 		})
 	})
 
-	handlers.NewUserHandler(userService, nc).SetUpRoutes(r.Group("/api/v1"))
+	authMiddleware := middleware.NewAuthMiddleware(config.CurrentConfigs.JWTSecret)
+
+	handlers.NewUserHandler(userService, redisClient, authMiddleware, nc).SetUpRoutes(r.Group("/api/v1"))
 
 	return r, nil
 }

@@ -18,6 +18,7 @@ services:
       user-network:
     depends_on:
       - db
+      - redis
       - nats
 
   db:
@@ -49,6 +50,14 @@ services:
       - "4222:4222"
     networks: [ "nats" ]
 
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    volumes:
+      - user-data:/data
+    networks:
+      - user-network
 
 networks:
   user-network:

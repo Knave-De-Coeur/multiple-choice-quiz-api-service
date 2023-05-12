@@ -17,7 +17,11 @@ func fallbackConfigs() {
 	viper.SetDefault("MAX_CONNECTIONS", 100)
 	viper.SetDefault("MAX_IDLE_CONNECTIONS", 10)
 	viper.SetDefault("MAX_LIFETIME", 1)
+	viper.SetDefault("REDIS_PASSWORD", "")
+	viper.SetDefault("REDIS_DB", 0)
+	viper.SetDefault("REDIS_EXPIRY", 60)
 	viper.SetDefault("NATS_URL", "nats://127.0.0.1:4222")
+	viper.SetDefault("JWT_SECRET", "testsecret")
 }
 
 // Configurations app configs from env file, env params or fallback configs
@@ -32,7 +36,11 @@ type Configurations struct {
 	MaxConnections     int    `mapstructure:"MAX_CONNECTIONS"`
 	MaxIdleConnections int    `mapstructure:"MAX_IDLE_CONNECTIONS"`
 	MaxLifetime        int    `mapstructure:"MAX_LIFETIME"`
+	RedisAddress       string `mapstructure:"REDIS_ADDRESS"`
+	RedisPassword      string `mapstructure:"REDIS_PASSWORD"`
+	RedisDB            int    `mapstructure:"REDIS_DB"`
 	NatsURL            string `mapstructure:"NATS_URL"`
+	JWTSecret          string `mapstructure:"JWT_SECRET"`
 }
 
 var CurrentConfigs Configurations

@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"net/http"
 	"strconv"
+	"user-api-service/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -18,34 +20,40 @@ type UserHandler struct {
 	Nats        *nats.Conn
 	UserService services.UserServices
 	Validator   *validator.Validate
+	Middleware  *middleware.AuthMiddleware
+	RedisClient *redis.Client
 }
 
-func NewUserHandler(service *services.UserService, nc *nats.Conn) *UserHandler {
+func NewUserHandler(service *services.UserService, redisClient *redis.Client, auth *middleware.AuthMiddleware, nc *nats.Conn) *UserHandler {
 	return &UserHandler{
 		Nats:        nc,
 		UserService: service,
 		Validator:   validator.New(),
+		Middleware:  auth,
+		RedisClient: redisClient,
 	}
 }
 
 // SetUpRoutes sets up user routes with accompanying methods for processing
-func (handler *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
+func (h *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 
-	r.POST("login", handler.login)
+	r.POST("login", h.login)
+	// TODO: get redis, jwt secret and apply middleware properly
+	//r.POST("logout", h.logout)
 
-	r.GET("users", handler.getUsers)
+	r.GET("users", h.getUsers)
 
 	r.Group("user").
-		POST("", handler.newUser).
-		GET("/:uID", handler.getUserByID).
-		PUT("/:uID", handler.updateUser).
-		DELETE("/:uID", handler.deleteUser)
+		POST("", h.newUser).
+		GET("/:uID", h.Middleware.RequireAuth(), h.getUserByID).
+		PUT("/:uID", h.Middleware.RequireAuth(), h.updateUser).
+		DELETE("/:uID", h.Middleware.RequireAuth(), h.deleteUser)
 
 }
 
-func (handler *UserHandler) getUsers(c *gin.Context) {
+func (h *UserHandler) getUsers(c *gin.Context) {
 
-	users, err := handler.UserService.GetBasicUserDataList()
+	users, err := h.UserService.GetBasicUserDataList()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get users", nil, err))
 		return
@@ -55,7 +63,7 @@ func (handler *UserHandler) getUsers(c *gin.Context) {
 
 }
 
-func (handler *UserHandler) getUserByID(c *gin.Context) {
+func (h *UserHandler) getUserByID(c *gin.Context) {
 
 	userID := c.Param("uID")
 	userIDint, err := strconv.Atoi(userID)
@@ -68,7 +76,7 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 		return
 	}
 
-	user, err := handler.UserService.GetUserByID(uint(userIDint))
+	user, err := h.UserService.GetUserByID(uint(userIDint))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to get user", nil, err))
 		return
@@ -78,7 +86,7 @@ func (handler *UserHandler) getUserByID(c *gin.Context) {
 
 }
 
-func (handler *UserHandler) newUser(c *gin.Context) {
+func (h *UserHandler) newUser(c *gin.Context) {
 
 	var newUserReq api.NewUserRequest
 
@@ -87,12 +95,12 @@ func (handler *UserHandler) newUser(c *gin.Context) {
 		return
 	}
 
-	if err := handler.Validator.Struct(newUserReq); err != nil {
+	if err := h.Validator.Struct(newUserReq); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
 		return
 	}
 
-	res, err := handler.UserService.InsertUser(newUserReq)
+	res, err := h.UserService.InsertUser(newUserReq)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.GenerateMessageResponse("failed to add user", nil, err))
 		return
@@ -102,7 +110,7 @@ func (handler *UserHandler) newUser(c *gin.Context) {
 
 }
 
-func (handler *UserHandler) updateUser(c *gin.Context) {
+func (h *UserHandler) updateUser(c *gin.Context) {
 
 	userID := c.Param("uID")
 	userIDint, err := strconv.Atoi(userID)
@@ -120,12 +128,12 @@ func (handler *UserHandler) updateUser(c *gin.Context) {
 
 	updateUserReq.ID = uint(userIDint)
 
-	if err = handler.Validator.Struct(updateUserReq); err != nil {
+	if err = h.Validator.Struct(updateUserReq); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
 		return
 	}
 
-	err = handler.UserService.UpdateUser(updateUserReq)
+	err = h.UserService.UpdateUser(updateUserReq)
 	if err != nil {
 		var status int
 		if err == gorm.ErrRecordNotFound {
@@ -141,7 +149,7 @@ func (handler *UserHandler) updateUser(c *gin.Context) {
 
 }
 
-func (handler *UserHandler) deleteUser(c *gin.Context) {
+func (h *UserHandler) deleteUser(c *gin.Context) {
 
 	userID := c.Param("uID")
 	userIDint, err := strconv.Atoi(userID)
@@ -159,12 +167,12 @@ func (handler *UserHandler) deleteUser(c *gin.Context) {
 
 	deleteUserReq.ID = uint(userIDint)
 
-	if err = handler.Validator.Struct(deleteUserReq); err != nil {
+	if err = h.Validator.Struct(deleteUserReq); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.GenerateMessageResponse("missing or incorrect data received", nil, err))
 		return
 	}
 
-	err = handler.UserService.DeleteUser(deleteUserReq)
+	err = h.UserService.DeleteUser(deleteUserReq)
 	if err != nil {
 		var status int
 		if err == gorm.ErrRecordNotFound {
@@ -180,7 +188,7 @@ func (handler *UserHandler) deleteUser(c *gin.Context) {
 }
 
 // Login endpoint function that checks username and password and sets user appropriately
-func (handler *UserHandler) login(c *gin.Context) {
+func (h *UserHandler) login(c *gin.Context) {
 	var loginReq api.LoginRequest
 
 	if err := c.ShouldBindJSON(&loginReq); err != nil {
@@ -188,7 +196,7 @@ func (handler *UserHandler) login(c *gin.Context) {
 		return
 	}
 
-	user, err := handler.UserService.Login(loginReq)
+	user, err := h.UserService.Login(loginReq)
 	if err != nil && err == gorm.ErrRecordNotFound {
 		c.AbortWithStatusJSON(http.StatusNotFound, api.GenerateMessageResponse("failed to login requested user", nil, err))
 		return
