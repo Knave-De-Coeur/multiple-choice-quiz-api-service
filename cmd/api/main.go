@@ -98,7 +98,7 @@ func setUpRoutes(dbConn *gorm.DB, redisClient *redis.Client, nc *nats.Conn, logg
 
 	portNum, err := strconv.Atoi(config.CurrentConfigs.Port)
 	if err != nil {
-		logger.Error(fmt.Sprintf("port config not int %d", err))
+		logger.Error(fmt.Sprintf("port config not int %e", err))
 		return nil, err
 	}
 
