@@ -13,8 +13,8 @@ import (
 	gormMysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"user-api-service/internal/config"
-	"user-api-service/internal/pkg"
+	"github.com/knave-de-coeur/user-api-service/internal/config"
+	"github.com/knave-de-coeur/user-api-service/internal/pkg"
 )
 
 // GetDBConnectionString uses configs to generate a connection string to the db

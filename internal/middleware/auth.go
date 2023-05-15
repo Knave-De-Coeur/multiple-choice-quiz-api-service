@@ -3,13 +3,15 @@ package middleware
 import (
 	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-	"user-api-service/internal/api"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
+
+	"github.com/knave-de-coeur/user-api-service/internal/api"
 )
 
 type IAuthMiddleware interface {

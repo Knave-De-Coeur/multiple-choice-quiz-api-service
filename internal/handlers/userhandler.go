@@ -2,18 +2,19 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"net/http"
 	"strconv"
-	"user-api-service/internal/middleware"
+
+	"github.com/redis/go-redis/v9"
+
+	"github.com/knave-de-coeur/user-api-service/internal/api"
+	"github.com/knave-de-coeur/user-api-service/internal/middleware"
+	"github.com/knave-de-coeur/user-api-service/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
-
-	"user-api-service/internal/api"
-	"user-api-service/internal/services"
 )
 
 type UserHandler struct {

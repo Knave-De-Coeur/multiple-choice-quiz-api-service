@@ -4,17 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"strconv"
 	"time"
-	"user-api-service/internal/utils"
+
+	"github.com/dgrijalva/jwt-go"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"user-api-service/internal/api"
-	"user-api-service/internal/pkg"
+	"github.com/knave-de-coeur/user-api-service/internal/api"
+	"github.com/knave-de-coeur/user-api-service/internal/pkg"
+	"github.com/knave-de-coeur/user-api-service/internal/utils"
 )
 
 type UserService struct {

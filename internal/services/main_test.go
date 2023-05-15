@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/knave-de-coeur/user-api-service/internal/config"
+	"github.com/knave-de-coeur/user-api-service/internal/utils"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"user-api-service/internal/config"
-	"user-api-service/internal/utils"
 )
 
 var (

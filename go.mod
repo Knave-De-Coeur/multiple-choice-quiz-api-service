@@ -1,4 +1,4 @@
-module user-api-service
+module github.com/knave-de-coeur/user-api-service
 
 go 1.20
 

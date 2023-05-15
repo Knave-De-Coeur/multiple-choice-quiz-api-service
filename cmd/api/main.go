@@ -2,19 +2,21 @@ package main
 
 import (
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"log"
 	"strconv"
+
+	"github.com/redis/go-redis/v9"
+
+	"github.com/knave-de-coeur/user-api-service/internal/config"
+	"github.com/knave-de-coeur/user-api-service/internal/handlers"
+	"github.com/knave-de-coeur/user-api-service/internal/middleware"
+	"github.com/knave-de-coeur/user-api-service/internal/services"
+	"github.com/knave-de-coeur/user-api-service/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"user-api-service/internal/config"
-	"user-api-service/internal/handlers"
-	"user-api-service/internal/middleware"
-	"user-api-service/internal/services"
-	"user-api-service/internal/utils"
 )
 
 func main() {
