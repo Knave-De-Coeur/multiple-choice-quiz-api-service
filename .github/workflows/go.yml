@@ -27,7 +27,8 @@ jobs:
       run: go vet ./...
       
     - name: Install dependencies
-      run: go mod tidy
+      run: | 
+        go mod tidy
       env:
         GOPATH: /home/runner/work/user-api-service/user-api-service/go
 
