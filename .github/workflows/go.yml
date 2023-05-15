@@ -28,5 +28,3 @@ jobs:
 
     - name: Test
       run: go test -v ./...
-      env:
-        GOPATH: /home/runner/work/user-api-service/user-api-service/go
