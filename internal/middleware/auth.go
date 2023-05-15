@@ -48,7 +48,7 @@ func (a *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected method", token.Header["alg"])
+				return nil, fmt.Errorf("unexpected method: %s", token.Header["alg"])
 			}
 			return []byte(a.jwtSecret), nil
 		})
