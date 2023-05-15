@@ -22,6 +22,7 @@ jobs:
       
     - name: Install dependencies
       run: | 
+        cd $GOPATH/src/github.com/knave-de-coeur/user-api-service
         go mod tidy
       env:
         GOPATH: /home/runner/work/user-api-service/user-api-service/go
