@@ -25,6 +25,10 @@ jobs:
 
     - name: Go Vet
       run: go vet ./...
+      
+    - name: Install dependencies
+      run: |
+        go get -v -t -d ./...
 
     - name: Test
       run: go test -v ./...
