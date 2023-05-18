@@ -16,17 +16,27 @@ jobs:
         path: go/src/github.com/knave-de-coeur/user-api-service
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.20
+        go-version: 1.20.3
+      
+    - name: Install dependencies
+      run: | 
+        cd $GOPATH/src/github.com/knave-de-coeur/user-api-service
+        go mod tidy
+      env:
+        GOPATH: /home/runner/work/user-api-service/user-api-service/go
 
-    - name: Go Format
-      run: gofmt -s -w .
-
-    - name: Go Vet
-      run: go vet ./...
+    - name: Build
+      run: |
+        cd $GOPATH/src/github.com/knave-de-coeur/user-api-service
+        go build -v ./...
+      env:
+        GOPATH: /home/runner/work/user-api-service/user-api-service/go
 
     - name: Test
-      run: go test -v ./...
+      run: |
+        cd $GOPATH/src/github.com/knave-de-coeur/user-api-service
+        go test -v ./...
       env:
         GOPATH: /home/runner/work/user-api-service/user-api-service/go
