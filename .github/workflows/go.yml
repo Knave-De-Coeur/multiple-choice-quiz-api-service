@@ -27,6 +27,13 @@ jobs:
       env:
         GOPATH: /home/runner/work/user-api-service/user-api-service/go
 
+    - name: Build
+      run: |
+        cd $GOPATH/src/github.com/knave-de-coeur/user-api-service
+        go build -v ./...
+      env:
+        GOPATH: /home/runner/work/user-api-service/user-api-service/go
+
     - name: Test
       run: |
         cd $GOPATH/src/github.com/knave-de-coeur/user-api-service

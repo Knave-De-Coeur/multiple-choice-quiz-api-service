@@ -26,10 +26,7 @@ func main() {
 		log.Fatalf("somethign went wrong setting up logger for api: %+v", err)
 	}
 
-	defer func(logger *zap.Logger) {
-		err = logger.Sync()
-		panic(fmt.Sprintf("something went wrong with logger %v", err))
-	}(logger)
+	utils.Check(logger.Sync)
 
 	logger.Info("🚀 connecting to db")
 
@@ -76,7 +73,7 @@ func main() {
 
 		logger.Info("✅ Connected to nats!")
 
-		defer nc.Drain()
+		utils.Check(nc.Drain)
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
