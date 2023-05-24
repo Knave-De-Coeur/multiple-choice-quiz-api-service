@@ -17,15 +17,26 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserHandler struct {
-	Nats        *nats.Conn
-	UserService services.UserServices
-	Validator   *validator.Validate
-	Middleware  *middleware.AuthMiddleware
-	RedisClient *redis.Client
+type IUserHandler interface {
+	SetUpRoutes(r *gin.RouterGroup)
+	getUsers(c *gin.Context)
+	newUser(c *gin.Context)
+	updateUser(c *gin.Context)
+	deleteUser(c *gin.Context)
+	login(c *gin.Context)
 }
 
-func NewUserHandler(service *services.UserService, redisClient *redis.Client, auth *middleware.AuthMiddleware, nc *nats.Conn) *UserHandler {
+type UserHandler struct {
+	UserService services.UserServices
+	Middleware  middleware.IAuthMiddleware
+	Validator   *validator.Validate
+	RedisClient *redis.Client
+	Nats        *nats.Conn
+}
+
+func NewUserHandler(service services.UserServices, auth middleware.IAuthMiddleware, redisClient *redis.Client,
+	nc *nats.Conn) *UserHandler {
+
 	return &UserHandler{
 		Nats:        nc,
 		UserService: service,
@@ -39,7 +50,7 @@ func NewUserHandler(service *services.UserService, redisClient *redis.Client, au
 func (h *UserHandler) SetUpRoutes(r *gin.RouterGroup) {
 
 	r.POST("login", h.login)
-	// TODO: get redis, jwt secret and apply middleware properly
+	// TODO: finalize logout
 	//r.POST("logout", h.logout)
 
 	r.GET("users", h.getUsers)
