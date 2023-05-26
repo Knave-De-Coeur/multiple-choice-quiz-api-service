@@ -32,7 +32,7 @@ type UserServiceSettings struct {
 	JWTSecret string
 }
 
-type UserServices interface {
+type IUserService interface {
 	InsertUser(user api.NewUserRequest) (*api.User, error)
 	UpdateUser(req api.UpdateUserRequest) error
 	DeleteUser(req api.DeleteUserRequest) error

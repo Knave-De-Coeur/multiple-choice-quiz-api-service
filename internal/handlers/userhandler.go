@@ -27,14 +27,14 @@ type IUserHandler interface {
 }
 
 type UserHandler struct {
-	UserService services.UserServices
+	UserService services.IUserService
 	Middleware  middleware.IAuthMiddleware
 	Validator   *validator.Validate
 	RedisClient *redis.Client
 	Nats        *nats.Conn
 }
 
-func NewUserHandler(service services.UserServices, auth middleware.IAuthMiddleware, redisClient *redis.Client,
+func NewUserHandler(service services.IUserService, auth middleware.IAuthMiddleware, redisClient *redis.Client,
 	nc *nats.Conn) *UserHandler {
 
 	return &UserHandler{
