@@ -1,19 +1,32 @@
-FROM golang:1.20.1-alpine3.17 AS build-env
+############################
+# STEP 1 build executable binary
+############################
+FROM golang:1.20.3-alpine3.17 AS builder
+
+RUN apk update && apk add --no-cache git
 
 ENV GOPATH=/go
 
 WORKDIR $GOPATH/src/github.com/knave-de-coeur/user-api-service/
 
-COPY . $GOPATH/src/github.com/knave-de-coeur/user-api-service/
+COPY . .
 
+RUN go mod tidy
 
-# Download necessary Go modules
-RUN go mod download
+# Build the binary.
+RUN go build -o $GOPATH/src/github.com/knave-de-coeur/user-api-service/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api/main.go
+############################
+# STEP 2 build a small image
+############################
+FROM scratch
 
-ENV GO111MODULE=on
+ENV GOPATH=/go
 
-RUN go build -o /go/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api
+# Copy our static executable.
+COPY --from=builder $GOPATH/src/github.com/knave-de-coeur/user-api-service/bin/user-api $GOPATH/bin/user-api
+COPY --from=builder $GOPATH/src/github.com/knave-de-coeur/user-api-service/internal/migrations $GOPATH/bin/migrations
 
 EXPOSE 8080
 
-ENTRYPOINT ["$GOPATH/bin/user-api"]
+# Run the api binary.
+ENTRYPOINT ["/go/bin/user-api"]

@@ -92,7 +92,10 @@ func RunUpMigrations(db *sql.DB, logger *zap.Logger) (err error) {
 	fileLocation := fmt.Sprintf("file://%s", config.CurrentConfigs.MigrationsDir)
 	m, err := migrate.NewWithDatabaseInstance(fileLocation, "sql", driver)
 	if err != nil {
-		logger.Error("❌ failed to get migration instance", zap.Error(err))
+		logger.Error("❌ failed to get migration instance",
+			zap.Error(err),
+			zap.String("fileLocation", fileLocation),
+		)
 		return err
 	}
 
