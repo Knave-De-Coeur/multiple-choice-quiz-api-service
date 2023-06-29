@@ -1,32 +1,26 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.20.3-alpine3.17 AS builder
+FROM golang:1.20.3-alpine3.17
 
 RUN apk update && apk add --no-cache git
 
-ENV GOPATH=/go
+ENV GOPATH=/go/src
+ENV GOBIN=/go/bin
 
-WORKDIR $GOPATH/src/github.com/knave-de-coeur/user-api-service/
+WORKDIR /app
 
 COPY . .
 
 RUN go mod tidy
 
 # Build the binary.
-RUN go build -o $GOPATH/src/github.com/knave-de-coeur/user-api-service/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api/main.go
-############################
-# STEP 2 build a small image
-############################
-FROM scratch
+RUN go build -o /app/bin/user-api /app/cmd/api/main.go
 
-ENV GOPATH=/go
-
-# Copy our static executable.
-COPY --from=builder $GOPATH/src/github.com/knave-de-coeur/user-api-service/bin/user-api $GOPATH/bin/user-api
-COPY --from=builder $GOPATH/src/github.com/knave-de-coeur/user-api-service/internal/migrations $GOPATH/bin/migrations
+RUN cp -a /app/internal/migrations /app/bin/
+RUN chmod -R 777 /app/internal/migrations
 
 EXPOSE 8080
 
 # Run the api binary.
-ENTRYPOINT ["/go/bin/user-api"]
+CMD ["/app/bin/user-api"]

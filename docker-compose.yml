@@ -13,7 +13,7 @@ services:
       DB: user
       DB_USER: alex
       DB_PASSWORD: alexsecret
-      MIGRATIONS_DIR: ../src/github.com/knave-de-coeur/user-api-service/internal/migrations
+#      MIGRATIONS_DIR: ../src/github.com/knave-de-coeur/user-api-service/internal/migrations
     volumes:
       - .:/go/src/github.com/knave-de-coeur/user-api-service
     networks:
