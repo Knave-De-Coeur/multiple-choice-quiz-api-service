@@ -1,4 +1,4 @@
-FROM golang:1.20.1-alpine3.17 AS build-env
+FROM golang:1.21.6-alpine3.19 as build-env
 
 ENV GOPATH=/go
 

@@ -1,6 +1,6 @@
 module github.com/knave-de-coeur/user-api-service
 
-go 1.20
+go 1.21.6
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0

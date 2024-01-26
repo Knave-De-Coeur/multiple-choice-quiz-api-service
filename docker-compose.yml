@@ -1,9 +1,9 @@
-version: "3.9"
+version: "3.7"
 
 services:
   app:
     container_name: user-api-service
-    image: golang:1.20.1-alpine3.17
+    image: golang:1.21.6-alpine3.19
     build:
       dockerfile: Dockerfile
       context: .
@@ -24,6 +24,7 @@ services:
   db:
     container_name: mysql-v8
     image: mysql:8.0.26
+    platform: linux/x86_64
     command: --default-authentication-plugin=mysql_native_password
     ports:
       - '3306:3306'
