@@ -3,7 +3,7 @@ version: "3.7"
 services:
   app:
     container_name: user-api-service
-    image: golang:1.21.6-alpine3.19
+    restart: on-failure
     build:
       dockerfile: Dockerfile
       context: .
@@ -23,8 +23,8 @@ services:
 
   db:
     container_name: mysql-v8
-    image: mysql:8.0.26
     platform: linux/x86_64
+    image: mysql:8.0.26
     command: --default-authentication-plugin=mysql_native_password
     ports:
       - '3306:3306'
@@ -62,6 +62,7 @@ services:
 
 networks:
   user-network:
+    driver: "bridge"
   nats:
     name: nats
 

@@ -9,11 +9,12 @@ COPY . $GOPATH/src/github.com/knave-de-coeur/user-api-service/
 
 # Download necessary Go modules
 RUN go mod download
+RUN go mod vendor
 
 ENV GO111MODULE=on
 
-RUN go build -o /go/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api
 
 EXPOSE 8080
 
-ENTRYPOINT ["$GOPATH/bin/user-api"]
+CMD ["user-api"]

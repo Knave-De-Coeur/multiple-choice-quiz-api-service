@@ -120,7 +120,7 @@ func setUpRoutes(dbConn *gorm.DB, redisClient *redis.Client, nc *nats.Conn, logg
 
 	authMiddleware := middleware.NewAuthMiddleware(config.CurrentConfigs.JWTSecret)
 
-	handlers.NewUserHandler(userService, redisClient, authMiddleware, nc).SetUpRoutes(r.Group("/api/v1"))
+	handlers.NewUserHandler(userService, authMiddleware, redisClient, nc).SetUpRoutes(r.Group("/api/v1"))
 
 	return r, nil
 }

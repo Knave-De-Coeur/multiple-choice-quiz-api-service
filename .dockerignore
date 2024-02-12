@@ -1,0 +1,18 @@
+.vscode/
+.idea/
+
+bin
+
+# Exclude "build-time" ignore files.
+.dockerignore
+docker-compose*.yml
+Dockerfile*
+
+# Exclude git history and configuration.
+.gitignore
+.git
+
+README.md
+
+# Exclude tests.
+**/*_test.go

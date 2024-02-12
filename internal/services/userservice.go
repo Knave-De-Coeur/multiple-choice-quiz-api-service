@@ -32,7 +32,7 @@ type UserServiceSettings struct {
 	JWTSecret string
 }
 
-type UserServices interface {
+type IUserService interface {
 	InsertUser(user api.NewUserRequest) (*api.User, error)
 	UpdateUser(req api.UpdateUserRequest) error
 	DeleteUser(req api.DeleteUserRequest) error
@@ -56,6 +56,7 @@ func NewUserService(dbConn *gorm.DB, nc *nats.Conn, logger *zap.Logger, settings
 // InsertUser inserts new user in users table from data passed in arg.
 func (service *UserService) InsertUser(req api.NewUserRequest) (*api.User, error) {
 
+	// todo: create new method that checks the username straight away, avoid for loop
 	users, err := service.GetBasicUserDataList()
 	if err != nil {
 		return nil, err
