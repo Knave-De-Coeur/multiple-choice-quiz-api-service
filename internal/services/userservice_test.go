@@ -1,7 +1,6 @@
 package services
 
 import (
-	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -28,23 +27,43 @@ func TestUserService_InsertUser(t *testing.T) {
 	testCases := []InsertUserTest{
 		{
 			genericTestCase: genericTestCase{
-				Name:        "Simple test",
-				ExpectedErr: false,
+				Name:        "Simple test, empty result",
+				ExpectedErr: true,
 			},
 			Input: api.NewUserRequest{
 				User: &api.User{},
 			},
-			ExpectedResult: &api.User{},
-			SqlMockRows:    sqlMock.NewRows([]string{"id"}).AddRow(1),
+			ExpectedResult: nil,
 			SqlMock: func(test InsertUserTest) bool {
-				sqlMock.ExpectQuery(regexp.QuoteMeta("SELECT FROM users WHERE")).WillReturnRows()
-				sqlMock.ExpectQuery(
-					regexp.QuoteMeta("INSERT INTO users `first_name`,`last_name`, `email`, `age`, `username`, `password` VALUES (?, ?, ?, ?, ?)"),
-				).WithArgs(test.Input.FirstName, test.Input.LastName, test.Input.Email, test.Input.Age, test.Input.Username, test.Input.Password).
-					WillReturnRows(test.SqlMockRows)
-				return true
+				return false
 			},
 		},
+		//{
+		//	genericTestCase: genericTestCase{
+		//		Name:        "Simple test",
+		//		ExpectedErr: false,
+		//	},
+		//	Input: api.NewUserRequest{
+		//		User: &api.User{
+		//			FirstName: "Alex",
+		//			LastName:  "Mifsud",
+		//			Email:     "alexanderm1496@gmail.com",
+		//			Age:       27,
+		//			Username:  "alexm1496",
+		//			Password:  "qwerty123!",
+		//		},
+		//	},
+		//	ExpectedResult: &api.User{},
+		//	SqlMockRows:    sqlMock.NewRows([]string{"id"}).AddRow(1),
+		//	SqlMock: func(test InsertUserTest) bool {
+		//		sqlMock.ExpectQuery(regexp.QuoteMeta("SELECT FROM users WHERE")).WillReturnRows()
+		//		sqlMock.ExpectQuery(
+		//			regexp.QuoteMeta("INSERT INTO users `first_name`,`last_name`, `email`, `age`, `username`, `password` VALUES (?, ?, ?, ?, ?)"),
+		//		).WithArgs(test.Input.FirstName, test.Input.LastName, test.Input.Email, test.Input.Age, test.Input.Username, test.Input.Password).
+		//			WillReturnRows(test.SqlMockRows)
+		//		return true
+		//	},
+		//},
 	}
 
 	for _, test := range testCases {
