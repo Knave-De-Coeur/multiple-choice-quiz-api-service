@@ -1,20 +1,20 @@
-FROM golang:1.20.3-alpine3.17
+FROM golang:1.21.6-alpine3.19 as build-env
 
-RUN apk update && apk add --no-cache git
+ENV GOPATH=/go
 
-WORKDIR /app
+WORKDIR $GOPATH/src/github.com/knave-de-coeur/user-api-service/
 
-COPY . .
+COPY . $GOPATH/src/github.com/knave-de-coeur/user-api-service/
 
-RUN go mod tidy
 
-# Build the binary.
-RUN go build -o /app/bin/user-api /app/cmd/api/main.go
+# Download necessary Go modules
+RUN go mod download
+RUN go mod vendor
 
-RUN cp -a /app/internal/migrations /app/bin/
-RUN chmod -R 755 /app/bin/migrations
+ENV GO111MODULE=on
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/user-api $GOPATH/src/github.com/knave-de-coeur/user-api-service/cmd/api
 
 EXPOSE 8080
 
-# Run the api binary.
-CMD ["/app/bin/user-api"]
+CMD ["user-api"]
